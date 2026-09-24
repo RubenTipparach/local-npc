@@ -1,0 +1,18 @@
+{
+  "name": "local-npc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small top-down town where every villager is driven by a local LLM.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "play": "node scripts/play.js",
+    "play:cli": "node scripts/play.js --cli",
+    "setup": "node scripts/install.js",
+    "setup:runtime": "node scripts/download.js runtime",
+    "setup:models": "node scripts/download.js models"
+  }
+}

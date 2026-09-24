@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}</style>
+<title>Bramblewick Run Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --ink:#1c242b; --ink-2:#4f5b65; --muted:#7b8690; --rule:#d9dfe3;
+  --accent:#0e6b6b; --accent-soft:#e0efee;
+  --ok:#2f7d4f; --ok-bg:#e3f1e8; --warn:#9a6300; --warn-bg:#f7ecd6; --bad:#b0412c; --bad-bg:#f7e2dc;
+  --term-bg:#1a2126; --term-ink:#d9e2e7; --term-dim:#8497a3; --term-npc:#f0b36a; --term-you:#7fc8e0; --term-red:#ff8f7a; --term-green:#8fd6a0;
+  --sans:"Instrument Sans",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#111518; --surface:#182025; --ink:#e3e8ec; --ink-2:#adb8c1; --muted:#83909a; --rule:#2a343b;
+  --accent:#5cc2c0; --accent-soft:#16292b;
+  --ok:#72c894; --ok-bg:#15271d; --warn:#e2b150; --warn-bg:#2b2413; --bad:#ee8a73; --bad-bg:#321f1a;
+  --term-bg:#0b0f12;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#111518; --surface:#182025; --ink:#e3e8ec; --ink-2:#adb8c1; --muted:#83909a; --rule:#2a343b;
+  --accent:#5cc2c0; --accent-soft:#16292b;
+  --ok:#72c894; --ok-bg:#15271d; --warn:#e2b150; --warn-bg:#2b2413; --bad:#ee8a73; --bad-bg:#321f1a;
+  --term-bg:#0b0f12;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16.5px/1.6 var(--sans);padding-inline:20px;padding-block:40px 80px}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:52px}
+h1,h2,h3{margin:0;text-wrap:balance;line-height:1.15}
+h1{font-size:clamp(32px,5.5vw,46px);font-weight:700;letter-spacing:-.015em}
+h2{font-size:24px;font-weight:700}
+h3{font-size:17px;font-weight:600}
+p{margin:0;max-width:68ch}
+section{display:flex;flex-direction:column;gap:16px}
+.eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+.lede{font-size:18.5px;color:var(--ink-2)}
+code{font:.87em var(--mono);background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+.num{font-variant-numeric:tabular-nums}
+a{color:var(--accent)}
+
+.status{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:7px;font:600 13px/1 var(--sans);padding:7px 11px;border-radius:99px}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.ok{color:var(--ok);background:var(--ok-bg)}
+.chip.warn{color:var(--warn);background:var(--warn-bg)}
+.chip.bad{color:var(--bad);background:var(--bad-bg)}
+
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--surface)}
+.spec div{padding:12px 16px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.spec dt{font:600 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.spec dd{margin:0;font-weight:600}
+
+.cmds{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.cmd{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.cmd kbd{font:600 15px var(--mono);color:var(--accent)}
+.cmd p{font-size:14.5px;color:var(--ink-2)}
+
+ol.steps{margin:0;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:0;border-left:2px solid var(--rule);margin-left:10px}
+ol.steps li{counter-increment:s;position:relative;padding:0 0 18px 26px}
+ol.steps li::before{content:counter(s);position:absolute;left:-12px;top:0;width:22px;height:22px;border-radius:50%;background:var(--surface);border:2px solid var(--accent);color:var(--accent);font:600 11px/18px var(--mono);text-align:center}
+ol.steps li.fail::before{border-color:var(--bad);color:var(--bad)}
+ol.steps li:last-child{padding-bottom:0}
+ol.steps b{display:block;margin-bottom:2px}
+ol.steps p{font-size:15px;color:var(--ink-2)}
+
+.tbl{overflow-x:auto;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14.5px}
+th,td{text-align:left;vertical-align:top;padding:10px 14px;border-bottom:1px solid var(--rule)}
+th{font:600 11px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.n{font-family:var(--mono);font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
+td b{font-weight:600}
+
+.term{background:var(--term-bg);color:var(--term-ink);border-radius:10px;padding:14px 16px;overflow-x:auto;font:13px/1.6 var(--mono);white-space:pre;margin:0}
+.term .d{color:var(--term-dim)}
+.term .n{color:var(--term-npc);font-weight:600}
+.term .y{color:var(--term-you);font-weight:600}
+.term .r{color:var(--term-red);font-weight:600}
+.term .g{color:var(--term-green)}
+.caption{font-size:14px;color:var(--muted)}
+.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+
+.mermaid-wrap{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px;overflow-x:auto}
+
+ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;max-width:72ch}
+ul.plain li{padding-left:2px}
+.callout{border-left:3px solid var(--warn);background:var(--warn-bg);padding:12px 16px;border-radius:0 8px 8px 0;font-size:15px}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:14px">
+  <span class="eyebrow">local-npc · run log · 24 Sep 2026</span>
+  <h1>How Bramblewick was installed, run and tested</h1>
+  <p class="lede">A top-down town where every villager is a local LLM, run entirely on this laptop. This page records what I ran, what broke, what I measured and what still hasn't been checked.</p>
+  <div class="status">
+    <span class="chip ok">Game runs, browser and text mode</span>
+    <span class="chip ok">16 of 16 models downloaded (82.6 GB)</span>
+    <span class="chip bad">GPU unusable: CUDA crash</span>
+    <span class="chip warn">Everything runs on the CPU</span>
+  </div>
+</header>
+
+<section>
+  <span class="eyebrow">Machine</span>
+  <dl class="spec">
+    <div><dt>GPU</dt><dd>RTX 2000 Ada Laptop, 8,188 MiB</dd></div>
+    <div><dt>Driver</dt><dd class="num">595.79</dd></div>
+    <div><dt>System RAM</dt><dd>64 GB</dd></div>
+    <div><dt>Runtime</dt><dd>llama.cpp b11160, CUDA 13.4</dd></div>
+    <div><dt>Node</dt><dd class="num">26.10.0</dd></div>
+    <div><dt>OS</dt><dd>Windows 11 Enterprise</dd></div>
+  </dl>
+</section>
+
+<section>
+  <span class="eyebrow">Run it yourself</span>
+  <h2>Three commands</h2>
+  <div class="cmds">
+    <div class="cmd"><kbd>install.bat</kbd><p>Checks for Node, downloads llama.cpp, and asks for a model set: Starter (~5 GB), Recommended (~31 GB) or Everything (~83 GB). Safe to re-run; downloads resume.</p></div>
+    <div class="cmd"><kbd>play.bat</kbd><p>Starts the server and opens the town at <code>http://127.0.0.1:3000</code>. The case setup opens straight away. Ctrl+C stops it.</p></div>
+    <div class="cmd"><kbd>play.bat --cli</kbd><p>The same game in the terminal. Pick a difficulty, read the briefing, type a villager's name to question them, <code>/accuse</code> when sure.</p></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">How the pieces connect</span>
+  <h2>One server in front of every model</h2>
+  <div class="mermaid-wrap">
+<pre class="mermaid">
+flowchart LR
+  B["Browser game<br/>(play.bat)"] --> S
+  T["Text mode<br/>(play.bat --cli)"] --> S
+  O["Other tools<br/>(OpenAI API at /v1)"] --> S
+  S["Node server :3000<br/>villagers, prompts, director"] --> L["llama-server<br/>one model at a time<br/>swapped on request"]
+  S --- A["npcs/*/agent.md<br/>character sheets"]
+  S --- D["data/case.json<br/>current murder"]
+  L --- M["models/*.gguf<br/>16 files"]
+</pre>
+  </div>
+  <p>The server re-reads each villager's <code>agent.md</code> on every reply. For a murder, code decides the facts (victim, killer, where everyone really was, who lies) so the case is always solvable. The selected model then writes the story on top: weapon, motive, secrets, the clue at the scene.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Setup log</span>
+  <h2>What happened, in order</h2>
+  <ol class="steps">
+    <li><b>Checked the hardware</b><p><code>nvidia-smi</code> reported 8,188 MiB and 0 MiB in use; the Intel iGPU drives the display. No llama.cpp or Ollama installed.</p></li>
+    <li><b>Found the model files</b><p>Queried Hugging Face for 16 Q4 GGUF files from TinyLlama 1.1B to Qwen3 30B-A3B. All ungated, 82.6 GB total. Llama 3.3 70B left out: 42 GB, 1–2 tokens/s at best.</p></li>
+    <li class="fail"><b>First runtime download failed</b><p>GitHub's "latest" release pointed at a <code>v0.5.0</code> tag with no binaries. The script now picks the newest build that actually has the Windows CUDA zip (b11160).</p></li>
+    <li><b>Sped up downloads</b><p>One connection to Hugging Face gave about 3 MB/s. Splitting each file into 8 resumable ranges raised it to 5–8.6 MB/s, which appears to be the network's limit. All 16 finished.</p></li>
+    <li class="fail"><b>First reply was garbage</b><p>TinyLlama loaded in 3 s and generated 220 tokens at 180 tokens/s, all of them escape characters.</p></li>
+    <li class="fail"><b>Traced it to the GPU</b><p>Turning off flash attention fixed short prompts but hung on long ones. Other models crashed with <code>CUDA error: an illegal memory access</code>. The CUDA 12.4 and Vulkan builds failed too. CPU-only was correct.</p></li>
+    <li><b>Added a GPU self-test with CPU fallback</b><p>On first start the server runs a short <code>llama-bench</code>. If it fails, every model runs on the CPU. The result is cached for a week in <code>data/device.json</code>. Latest result: <code>GPU self-test failed (hung for 20 s)</code>.</p></li>
+    <li><b>Played it</b><p>Tested the dialogue API on five models, generated three murder cases, ran scripted text-mode sessions, and took a headless screenshot of the browser town.</p></li>
+  </ol>
+</section>
+
+<section>
+  <span class="eyebrow">GPU evidence</span>
+  <h2>Where the GPU breaks</h2>
+  <p>llama-bench on Llama 3.2 1B, prompt-processing batches of increasing size. Anything above 32 tokens crashes. Every NPC prompt is 1,000+ tokens.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Test</th><th>Result</th><th>Speed</th></tr></thead>
+      <tbody>
+        <tr><td>pp8</td><td><span class="chip ok">passed</span></td><td class="n">616.6 tokens/s</td></tr>
+        <tr><td>pp16</td><td><span class="chip ok">passed</span></td><td class="n">1,573.6 tokens/s</td></tr>
+        <tr><td>pp32</td><td><span class="chip ok">passed</span></td><td class="n">2,880.2 tokens/s</td></tr>
+        <tr><td>pp64</td><td><span class="chip bad">CUDA error</span></td><td class="n">—</td></tr>
+        <tr><td>Same prompt, CPU only (<code>-dev none</code>)</td><td><span class="chip ok">correct reply</span></td><td class="n">36 tokens/s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="callout">The CUDA 13.4, CUDA 12.4 and Vulkan builds all failing points at the driver or the card rather than llama.cpp. Next step: reboot, update or roll back the NVIDIA driver, delete <code>data/device.json</code>, and start the game to re-test.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Measured on the CPU</span>
+  <h2>Speed and how well each model played its villager</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Model</th><th>Tokens/s</th><th>First word</th><th>What happened in character</th></tr></thead>
+      <tbody>
+        <tr><td><b>TinyLlama 1.1B</b></td><td class="n">36</td><td class="n">3.5 s</td><td>Broke character ("I am a character in this game") and mixed up who was mayor.</td></tr>
+        <tr><td><b>Llama 3.2 1B</b></td><td class="n">41</td><td class="n">2.8 s</td><td>Stayed in voice but blurted out a secret on the first question.</td></tr>
+        <tr><td><b>Qwen3 1.7B</b></td><td class="n">22</td><td class="n">4.3 s</td><td>Stayed in character and shared only what the script allowed.</td></tr>
+        <tr><td><b>Llama 3.2 3B</b></td><td class="n">15–16</td><td class="n">8.6 s</td><td>Stayed in character, kept secrets, wrote a full murder case in about a minute (48 s measured once).</td></tr>
+        <tr><td><b>Llama 3.1 8B</b></td><td class="n">8.0</td><td class="n">—</td><td>Stayed in character in a short text-mode test.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption">First-word times include processing a prompt of about 1,000–1,200 tokens (about 113 tokens/s on the CPU for the 3B model). The other 11 models are downloaded but haven't been played yet.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Transcripts</span>
+  <h2>What the tests looked like</h2>
+
+  <h3>A lie that gets caught</h3>
+  <p>Normal case, Llama 3.2 3B. Old Wen was killed at the General Store. The code made Maribel the killer and gave her the cover story "home, asleep early". Asked separately, her daughter contradicted her.</p>
+  <div class="pair">
+<pre class="term"><span class="y">you ›</span> Where were you last night
+      around 9 PM?
+<span class="n">Maribel:</span> I was at home, asleep early,
+  with my daughter Juniper, love.
+  We were fast asleep by 9 PM,
+  I'm positive.</pre>
+<pre class="term"><span class="y">you ›</span> Where were you at 9 PM last
+      night, and who was with you?
+<span class="n">Juniper:</span> 9 PM? I was at the bridge
+  with Hilda Brambleworth! We were,
+  uh, watching the stars!</pre>
+  </div>
+
+  <h3>The briefing at the start of a case</h3>
+  <p>Text mode after murder became the default, trimmed to fit. The model wrote the story; the code built the leads.</p>
+<pre class="term"><span class="d">A body has been found in Bramblewick. How hard should the case be? 1) easy  2) normal  3) hard [2]:</span> 2
+<span class="d">The director is writing a normal case with Llama 3.2 3B Instruct…</span>
+
+<span class="r">☠  Thistle of Deceit</span> <span class="d">· normal</span>
+Old Wen discovered Gorran Ashby's lifeless body in the Library at 6 AM,
+with a pool of blood near the old records…
+
+  <b>Who</b>    Gorran Ashby, the town blacksmith.
+  <b>Where</b>  The Library
+  <b>When</b>   Between 9 PM and 11 PM last night. Found at 6 AM by Old Wen.
+  <b>How</b>    A pitchfork used to bludgeon the victim
+
+<b>Leads</b>
+  • At the scene: a glint of silver on a pair of glasses…
+  • Someone was out late and saw a figure heading toward the Library.
+  • Besides the killer, 1 innocent villager is lying to protect a secret.
+
+<span class="d">Hidden answer: Hilda Brambleworth, motivated by Gorran's feud with Tully
+and old records about the Hollis land. Both come from the villagers' hooks.</span></pre>
+
+  <h3>Suggested replies</h3>
+<pre class="term"><span class="d">—</span> <b>Gorran Ashby, the town blacksmith</b> <span class="d">—</span>
+<span class="n">Gorran:</span> Hmph. Newcomer. Need something forged?
+<span class="d">  Llama 3.1 8B Instruct · 8.0 tok/s</span>
+  <span class="g">1)</span> I'm looking for work, not just a tool.
+  <span class="g">2)</span> What's the gossip in Ashwood lately?
+  <span class="g">3)</span> I'll forge my own path, thanks, Gorran.
+<span class="d">  or type anything</span></pre>
+  <p class="caption">Option 2 invents a town called "Ashwood". Small models still slip like this.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Bugs found by running it</span>
+  <h2>What broke and what fixed it</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Garbage output, then CUDA crashes</td><td>GPU fails on batches over 32 tokens</td><td>Self-test on start, CPU fallback, cached result</td></tr>
+        <tr><td>Over a minute's wait on every launch</td><td>GPU self-test hung until a 60 s timeout</td><td>20 s timeout; result reused for a week</td></tr>
+        <tr><td>Replies ended with "terminated"</td><td>A dying llama-server still answered on the reused port</td><td>Each model launch gets a fresh port</td></tr>
+        <tr><td>Every panel visible at once in the browser</td><td>CSS <code>display</code> overrode the <code>hidden</code> attribute</td><td>Global <code>[hidden]</code> rule</td></tr>
+        <tr><td>Lines typed during a reply vanished</td><td>No input waiting when the line arrived</td><td>Typed lines are queued and answered in order</td></tr>
+        <tr><td>"(pausing, looking around)" in dialogue</td><td>Small models write stage directions</td><td>Stripped in both clients, held back while streaming</td></tr>
+        <tr><td>Two downloads could corrupt files</td><td>Both wrote the same partial files</td><td>Lock file; second download refuses to start</td></tr>
+        <tr><td>Bell story leaking into murders</td><td>Villager files still had the old plot</td><td>Rewrote all 8 with personal secrets instead</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Not verified yet</span>
+  <h2>What I haven't checked</h2>
+  <ul class="plain">
+    <li>The browser game hasn't been played by hand. I only took one headless screenshot of the town. The auto-opening case setup, the briefing panel and the typing dots were never seen rendered.</li>
+    <li>Text mode was tested with scripted input, not typed in a real terminal. The animated dots were checked by simulating a terminal.</li>
+    <li>11 of the 16 models, including every 12B–30B model, have never been loaded in the game.</li>
+    <li>The GPU path has never worked on this machine, so GPU speeds and the memory-fit estimates on the analysis page are untested.</li>
+    <li>No accusation has been made through the browser, so the win/lose screen and timeline table are unseen.</li>
+  </ul>
+</section>
+
+</div>
+
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true });</script>
+</html>

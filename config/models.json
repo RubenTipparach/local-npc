@@ -1,0 +1,145 @@
+{
+  "_comment": "Model registry. GGUF files live in ./models (git-ignored). 'args' are extra llama-server flags; GPU offload is left to llama-server's --fit (on by default), which also moves MoE experts to the CPU when VRAM runs out. 'chatTemplateKwargs' is passed to the model's chat template on every request.",
+  "defaults": {
+    "ctx": 8192,
+    "args": []
+  },
+  "models": [
+    {
+      "id": "tinyllama-1.1b",
+      "name": "TinyLlama 1.1B Chat",
+      "repo": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+      "file": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+      "sizeGB": 0.67,
+      "ctx": 2048,
+      "notes": "2023-era baseline. Very fast; loses character quickly. 2K context max."
+    },
+    {
+      "id": "llama-3.2-1b",
+      "name": "Llama 3.2 1B Instruct",
+      "repo": "bartowski/Llama-3.2-1B-Instruct-GGUF",
+      "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "sizeGB": 0.81,
+      "notes": "Smallest modern Llama."
+    },
+    {
+      "id": "smollm2-1.7b",
+      "name": "SmolLM2 1.7B Instruct",
+      "repo": "bartowski/SmolLM2-1.7B-Instruct-GGUF",
+      "file": "SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
+      "sizeGB": 1.06,
+      "notes": "Hugging Face's small model."
+    },
+    {
+      "id": "qwen3-1.7b",
+      "name": "Qwen3 1.7B",
+      "repo": "bartowski/Qwen_Qwen3-1.7B-GGUF",
+      "file": "Qwen_Qwen3-1.7B-Q4_K_M.gguf",
+      "sizeGB": 1.28,
+      "chatTemplateKwargs": { "enable_thinking": false },
+      "notes": "Hybrid thinking model; thinking disabled for dialogue."
+    },
+    {
+      "id": "llama-3.2-3b",
+      "name": "Llama 3.2 3B Instruct",
+      "repo": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+      "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "sizeGB": 2.02,
+      "notes": "Good small pick when the game shares the GPU."
+    },
+    {
+      "id": "phi-4-mini",
+      "name": "Phi-4-mini 3.8B Instruct",
+      "repo": "bartowski/microsoft_Phi-4-mini-instruct-GGUF",
+      "file": "microsoft_Phi-4-mini-instruct-Q4_K_M.gguf",
+      "sizeGB": 2.49,
+      "notes": "Strong reasoning for its size, drier dialogue."
+    },
+    {
+      "id": "gemma-3-4b",
+      "name": "Gemma 3 4B IT",
+      "repo": "bartowski/google_gemma-3-4b-it-GGUF",
+      "file": "google_gemma-3-4b-it-Q4_K_M.gguf",
+      "sizeGB": 2.49,
+      "notes": "Natural conversational tone."
+    },
+    {
+      "id": "qwen3-4b-2507",
+      "name": "Qwen3 4B Instruct 2507",
+      "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+      "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+      "sizeGB": 2.5,
+      "notes": "Best small model for instructions and JSON. Non-thinking."
+    },
+    {
+      "id": "ministral-8b",
+      "name": "Ministral 8B Instruct",
+      "repo": "bartowski/Ministral-8B-Instruct-2410-GGUF",
+      "file": "Ministral-8B-Instruct-2410-Q4_K_M.gguf",
+      "sizeGB": 4.91,
+      "notes": "Mistral's 8B."
+    },
+    {
+      "id": "llama-3.1-8b",
+      "name": "Llama 3.1 8B Instruct",
+      "repo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+      "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+      "sizeGB": 4.92,
+      "notes": "Fits fully on 8 GB. Large fine-tune ecosystem."
+    },
+    {
+      "id": "qwen3-8b",
+      "name": "Qwen3 8B",
+      "repo": "Qwen/Qwen3-8B-GGUF",
+      "file": "Qwen3-8B-Q4_K_M.gguf",
+      "sizeGB": 5.03,
+      "chatTemplateKwargs": { "enable_thinking": false },
+      "notes": "Recommended default. Thinking disabled for dialogue."
+    },
+    {
+      "id": "gemma-3-12b",
+      "name": "Gemma 3 12B IT",
+      "repo": "bartowski/google_gemma-3-12b-it-GGUF",
+      "file": "google_gemma-3-12b-it-Q4_K_M.gguf",
+      "sizeGB": 7.3,
+      "ctx": 4096,
+      "notes": "Tight fit. Short context."
+    },
+    {
+      "id": "mistral-nemo-12b",
+      "name": "Mistral Nemo 12B Instruct",
+      "repo": "bartowski/Mistral-Nemo-Instruct-2407-GGUF",
+      "file": "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+      "sizeGB": 7.48,
+      "ctx": 4096,
+      "notes": "Popular role-play base. Some layers may spill to CPU."
+    },
+    {
+      "id": "qwen3-14b",
+      "name": "Qwen3 14B",
+      "repo": "Qwen/Qwen3-14B-GGUF",
+      "file": "Qwen3-14B-Q4_K_M.gguf",
+      "sizeGB": 9.0,
+      "ctx": 4096,
+      "chatTemplateKwargs": { "enable_thinking": false },
+      "notes": "Partial CPU offload."
+    },
+    {
+      "id": "gpt-oss-20b",
+      "name": "gpt-oss 20B",
+      "repo": "ggml-org/gpt-oss-20b-GGUF",
+      "file": "gpt-oss-20b-MXFP4.gguf",
+      "sizeGB": 12.11,
+      "chatTemplateKwargs": { "reasoning_effort": "low" },
+      "notes": "MoE, ~3.6B active. Expert layers offloaded to CPU."
+    },
+    {
+      "id": "qwen3-30b-a3b-2507",
+      "name": "Qwen3 30B-A3B Instruct 2507",
+      "repo": "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
+      "file": "Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf",
+      "sizeGB": 18.56,
+      "notes": "MoE, ~3B active. Best quality here; expert layers offloaded to CPU."
+    }
+  ]
+}

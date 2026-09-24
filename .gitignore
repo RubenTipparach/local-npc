@@ -1,0 +1,13 @@
+# Large local assets
+models/
+runtime/
+
+# Node
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# Saved game state (current mystery)
+data/

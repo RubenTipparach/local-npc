@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}</style>
+<title>Local LLMs on 8 GB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@87,600;87,800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --ink:#18202b; --ink-2:#4a5566; --muted:#7a8494;
+  --rule:#dde1e7; --accent:#2b6488; --accent-soft:#e3edf4; --bar:#3d7aa3;
+  --good:#2e7d4f; --good-bg:#e4f2e9; --warn:#946000; --warn-bg:#f8eed8; --bad:#b0412a; --bad-bg:#f8e4df;
+  --limit:#b0412a;
+  --display:"Archivo",system-ui,sans-serif; --body:"Source Sans 3",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#12161c; --surface:#1a2029; --ink:#e6eaf0; --ink-2:#b0b9c6; --muted:#838d9b;
+  --rule:#2c3440; --accent:#7fb6db; --accent-soft:#1d2c39; --bar:#5f9cc6;
+  --good:#6cc28f; --good-bg:#17291f; --warn:#e0b04f; --warn-bg:#2d2513; --bad:#ec8a73; --bad-bg:#33201b; --limit:#ec8a73;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#12161c; --surface:#1a2029; --ink:#e6eaf0; --ink-2:#b0b9c6; --muted:#838d9b;
+  --rule:#2c3440; --accent:#7fb6db; --accent-soft:#1d2c39; --bar:#5f9cc6;
+  --good:#6cc28f; --good-bg:#17291f; --warn:#e0b04f; --warn-bg:#2d2513; --bad:#ec8a73; --bad-bg:#33201b; --limit:#ec8a73;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:17px/1.6 var(--body);padding-inline:20px;padding-block:40px 72px}
+.wrap{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{font-family:var(--display);font-stretch:87%;text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(34px,6vw,50px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:26px;font-weight:800}
+h3{font-size:18px;font-weight:600}
+p{margin:0;max-width:66ch}
+.eyebrow{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+section{display:flex;flex-direction:column;gap:18px}
+.lede{font-size:19px;color:var(--ink-2)}
+code,.num{font-family:var(--mono);font-size:.88em}
+.num{font-variant-numeric:tabular-nums}
+
+/* spec sheet */
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));border:1px solid var(--rule);border-radius:10px;background:var(--surface);overflow:hidden}
+.spec div{padding:16px 18px;border-right:1px solid var(--rule);border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:4px}
+.spec dt{font:600 11px/1.2 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.spec dd{margin:0;font:600 20px/1.25 var(--display);font-stretch:87%}
+.spec dd small{display:block;font:400 13px/1.4 var(--body);color:var(--ink-2)}
+
+.answer{border-left:4px solid var(--accent);background:var(--accent-soft);padding:18px 22px;border-radius:0 8px 8px 0;display:flex;flex-direction:column;gap:10px}
+.answer strong{font-weight:600}
+
+/* chart */
+.chart{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:20px 20px 14px;display:flex;flex-direction:column;gap:6px}
+.chart-head{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--ink-2)}
+.rows{position:relative;display:flex;flex-direction:column;gap:6px;margin-top:28px}
+.row{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:12px;font-size:14px}
+.row .lab{color:var(--ink);text-align:right;line-height:1.2}
+.track{position:relative;height:22px}
+.bar{position:absolute;left:0;top:3px;height:16px;background:var(--bar);border-radius:0 4px 4px 0;display:flex}
+.bar .kv{height:100%;background:var(--bar);opacity:.45;border-radius:0 4px 4px 0;margin-left:2px}
+.bar .w{height:100%}
+.val{position:absolute;top:0;font:400 12px/22px var(--mono);color:var(--ink-2);padding-left:8px;white-space:nowrap}
+.track:hover .bar{filter:brightness(1.12)}
+.limit{position:absolute;top:-8px;bottom:-4px;width:0;border-left:2px dashed var(--limit);pointer-events:none}
+.limit span{position:absolute;top:-16px;left:6px;font:600 11px/1 var(--mono);color:var(--limit);white-space:nowrap}
+.axis{display:grid;grid-template-columns:150px 1fr;gap:12px;margin-top:4px}
+.ticks{position:relative;height:18px;border-top:1px solid var(--rule)}
+.ticks span{position:absolute;transform:translateX(-50%);font:400 11px/18px var(--mono);color:var(--muted)}
+.chart-foot{font-size:13px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
+.key{display:inline-flex;align-items:center;gap:6px}
+.key i{display:inline-block;width:14px;height:10px;border-radius:2px;background:var(--bar)}
+.key i.kvk{opacity:.45}
+@media (max-width:560px){.row,.axis{grid-template-columns:96px 1fr}.row .lab{font-size:12px}}
+
+/* table */
+.tbl{overflow-x:auto;border:1px solid var(--rule);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:15px}
+th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font:600 11px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.n{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+td .m{font-weight:600}
+td .sub{display:block;font-size:13px;color:var(--ink-2)}
+.pill{display:inline-flex;align-items:center;gap:5px;font:600 12px/1 var(--mono);padding:5px 8px;border-radius:99px;white-space:nowrap}
+.pill.good{color:var(--good);background:var(--good-bg)}
+.pill.warn{color:var(--warn);background:var(--warn-bg)}
+.pill.bad{color:var(--bad);background:var(--bad-bg)}
+
+.picks{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.pick{border:1px solid var(--rule);border-radius:10px;padding:18px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+.pick .role{font:600 11px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.pick h3{color:var(--accent)}
+.pick p{font-size:15px;color:var(--ink-2)}
+
+ul.plain{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px;max-width:70ch}
+pre{margin:0;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px 18px;overflow-x:auto;font:400 13.5px/1.6 var(--mono);color:var(--ink)}
+pre .c{color:var(--muted)}
+.fine{font-size:14px;color:var(--muted)}
+a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:14px">
+  <span class="eyebrow">local-npc · hardware fit report · Sep 2026</span>
+  <h1>Which local LLM fits an RTX 2000 Ada with 8 GB</h1>
+  <p class="lede">This machine can run 3B–8B models entirely on the GPU at interactive speed. Larger models can still run by spilling part of the weights into the 64 GB of system RAM. For game NPC dialogue, an 8B model at 4-bit is the sweet spot, or 3–4B if the game renders on the same GPU.</p>
+</header>
+
+<section>
+  <span class="eyebrow">Your machine</span>
+  <dl class="spec">
+    <div><dt>Discrete GPU</dt><dd>RTX 2000 Ada<small>Laptop GPU, Ada Lovelace (AD107), CUDA</small></dd></div>
+    <div><dt>VRAM</dt><dd class="num">8 GB<small>8,188 MiB reported, 0 MiB in use at idle</small></dd></div>
+    <div><dt>System RAM</dt><dd class="num">64 GB<small>Room for CPU offload of big models</small></dd></div>
+    <div><dt>Integrated GPU</dt><dd>Intel Arc Pro<small>Drives the display, so the NVIDIA card stays free</small></dd></div>
+    <div><dt>Driver</dt><dd class="num">595.79<small>Recent enough for current CUDA builds</small></dd></div>
+  </dl>
+  <p class="fine">Read with <code>nvidia-smi</code> and WMI on this machine. Windows reports the NVIDIA card's AdapterRAM as 4 GB because that field is a 32-bit value; <code>nvidia-smi</code> shows the real 8 GB.</p>
+</section>
+
+<section>
+  <span class="eyebrow">Short answer</span>
+  <h2>Will Llama work here?</h2>
+  <div class="answer">
+    <p><strong>Yes.</strong> Llama 3.1 8B Instruct at Q4_K_M is about 4.9 GB of weights. With an 8K-token context it needs roughly 6.3 GB in total, which leaves headroom inside 8 GB. Expect somewhere around 30–40 tokens per second, which is faster than people read.</p>
+    <p>Llama 3.2 3B needs about 3.2 GB and runs around twice as fast. That is the better choice if a game engine is using the same GPU.</p>
+    <p>Llama 3.3 70B does not fit. At 4-bit it is about 42 GB, so it would run almost entirely on the CPU at 1–2 tokens per second.</p>
+    <p>If by "llama" you meant the runtimes: <strong>llama.cpp</strong> and <strong>Ollama</strong> both run well on this card with CUDA.</p>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">VRAM budget</span>
+  <h2>How much memory each model needs</h2>
+  <p>Each bar is the 4-bit weights plus about 1.3 GB for an 8K-token KV cache and CUDA overhead. Anything past the dashed line has to put some layers in system RAM, and it slows down in proportion to how much spills.</p>
+  <figure class="chart" style="margin:0" aria-label="Estimated VRAM needed per model, compared to the 8 GB limit">
+    <div class="chart-head"><span>Estimated VRAM at Q4, 8K context (GB)</span><span>Hover a bar for details</span></div>
+    <div class="rows" id="rows"></div>
+    <div class="axis"><span></span><div class="ticks" id="ticks"></div></div>
+    <div class="chart-foot">
+      <span class="key"><i></i>Weights</span>
+      <span class="key"><i class="kvk"></i>KV cache + overhead</span>
+      <span class="key" style="color:var(--limit)">┆ 8 GB VRAM limit</span>
+      <span>Llama 3.3 70B (~43.8 GB) is off the scale.</span>
+    </div>
+  </figure>
+</section>
+
+<section>
+  <span class="eyebrow">Candidates</span>
+  <h2>Model shortlist</h2>
+  <p>Speeds are estimates for this card. Generation speed is limited by memory bandwidth (roughly 224 GB/s here), and a laptop GPU's power limit changes the result. Measure on your machine with <code>llama-bench</code> before committing.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Model</th><th>Q4 weights</th><th>Fit on 8 GB</th><th>Est. tokens/s</th><th>Notes</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Measured on this machine</span>
+  <h2>What actually happened</h2>
+  <p>With llama.cpp b11160, GPU prompt processing crashes with <code>CUDA error: an illegal memory access</code> once a batch exceeds 32 tokens. The CUDA 12.4, CUDA 13.4 and Vulkan builds all fail the same way. Short prompts work, and TinyLlama generated at 180 tokens/s before it failed. The pattern points at the NVIDIA driver (595.79) or the GPU, not the model. Until that is fixed, the game runs everything on the CPU. Rebooting and updating or rolling back the driver is the first thing to try.</p>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Model</th><th>Device</th><th>Measured tokens/s</th><th>NPC dialogue quality</th></tr></thead>
+      <tbody>
+        <tr><td><span class="m">TinyLlama 1.1B</span></td><td>CPU</td><td class="n">36</td><td>Broke character ("I am a character in this game") and mixed up facts.</td></tr>
+        <tr><td><span class="m">Llama 3.2 1B</span></td><td>CPU</td><td class="n">41</td><td>Stayed in voice but gave away a secret on the first question.</td></tr>
+        <tr><td><span class="m">Qwen3 1.7B</span></td><td>CPU</td><td class="n">22</td><td>Stayed in character and followed the script.</td></tr>
+        <tr><td><span class="m">Llama 3.2 3B</span></td><td>CPU</td><td class="n">16</td><td>Stayed in character, kept secrets and wrote a full mystery case in 48 s.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Recommendation</span>
+  <h2>What to use for NPCs</h2>
+  <div class="picks">
+    <div class="pick"><span class="role">Default pick</span><h3>Qwen3 8B or Llama 3.1 8B</h3><p>Q4_K_M, 8K context, fully on the GPU. Good at staying in character, following a system prompt, and producing JSON for actions or emotions. Qwen3 is usually stronger at instruction following. Llama 3.1 has the larger fine-tune and role-play ecosystem.</p></div>
+    <div class="pick"><span class="role">Game on the same GPU</span><h3>Qwen3 4B, Gemma 3 4B or Llama 3.2 3B</h3><p>About 3–4 GB in total, which leaves around 4 GB for the renderer. Dialogue is simpler, but it is fast, and latency matters more than depth for background NPCs.</p></div>
+    <div class="pick"><span class="role">Quality ceiling</span><h3>Qwen3 30B-A3B with expert offload</h3><p>A mixture-of-experts model that activates only about 3B parameters per token. Keep attention layers on the GPU and put the expert layers in the 64 GB of RAM. It runs in the teens of tokens/s and writes noticeably better than 8B models. Use it for a single important character or offline content generation.</p></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Runtime</span>
+  <h2>How to run it</h2>
+  <ul class="plain">
+    <li><strong>Ollama</strong> is the quickest way to start. One installer gives you a local REST API on port 11434, and it picks GPU layers automatically.</li>
+    <li><strong>llama.cpp server</strong> is the better base for a game. It supports GBNF grammars and JSON schemas for guaranteed-valid NPC output, parallel slots so several NPCs can share one loaded model, KV cache quantization (<code>-ctk q8_0</code>) and fine-grained offload flags such as <code>--n-cpu-moe</code>.</li>
+    <li><strong>LM Studio</strong> is a GUI for trying models side by side before choosing one.</li>
+    <li><strong>vLLM</strong> is not recommended here. It targets Linux servers with more VRAM.</li>
+  </ul>
+<pre><span class="c"># Try it in two minutes with Ollama</span>
+ollama run llama3.1:8b
+ollama run qwen3:8b
+
+<span class="c"># Or llama.cpp server: all layers on GPU, 8K context, 4 NPC slots</span>
+llama-server -m Qwen3-8B-Q4_K_M.gguf -ngl 99 -c 8192 --parallel 4 -ctk q8_0 -ctv q8_0 -fa on</pre>
+</section>
+
+<section>
+  <span class="eyebrow">NPC-specific</span>
+  <h2>Things that matter more than model choice</h2>
+  <ul class="plain">
+    <li><strong>The game and the model share VRAM.</strong> A game engine can use 2–5 GB by itself. Budget for both before choosing the model size, or run the model on a separate machine.</li>
+    <li><strong>Keep context short.</strong> Put persona, recent lines and a few retrieved memories in the prompt instead of full history. It saves VRAM and keeps time-to-first-token low.</li>
+    <li><strong>Stream tokens</strong> so the dialogue box starts filling in under half a second.</li>
+    <li><strong>Constrain output</strong> with a JSON schema or grammar (<code>{"say": "...", "emotion": "...", "action": "..."}</code>) so the game never has to parse free text.</li>
+    <li><strong>Q4_K_M is the usual quality/size balance.</strong> Q5_K_M is slightly better if you have headroom. Below Q4, small models degrade quickly.</li>
+  </ul>
+  <p class="fine">Model sizes are typical GGUF Q4_K_M figures and KV cache is estimated for an 8K context at 16-bit. The list reflects models available as of mid-2026, so check for newer releases in the same size classes.</p>
+</section>
+
+</div>
+
+<script>
+const MAX = 20, LIMIT = 8, OVER = 1.3;
+const models = [
+  {name:"TinyLlama 1.1B", w:0.67, fit:"good", tps:"120–180", note:"2023 baseline. Breaks character and invents facts; 2K context."},
+  {name:"Llama 3.2 3B", w:2.0, fit:"good", tps:"60–80", note:"Fastest Llama; fine for simple NPC barks."},
+  {name:"Phi-4-mini 3.8B", w:2.5, fit:"good", tps:"55–70", note:"Strong reasoning for its size; less natural dialogue."},
+  {name:"Qwen3 4B", w:2.5, fit:"good", tps:"55–70", note:"Best small model for following instructions and JSON."},
+  {name:"Gemma 3 4B", w:2.5, fit:"good", tps:"50–65", note:"Natural conversational tone."},
+  {name:"Llama 3.1 8B", w:4.9, fit:"good", tps:"30–40", note:"Answer to your question: fits well. Large fine-tune ecosystem."},
+  {name:"Qwen3 8B", w:5.0, fit:"good", tps:"30–38", note:"Recommended default. Disable thinking mode for dialogue."},
+  {name:"Gemma 3 12B", w:7.3, fit:"warn", tps:"15–22", note:"Only fits with a short context or q8 KV cache."},
+  {name:"Qwen3 14B", w:9.0, fit:"bad", tps:"8–12", note:"A few layers spill to the CPU."},
+  {name:"gpt-oss-20b", w:12.8, fit:"bad", tps:"15–25", note:"MoE with about 3.6B active parameters, so offload is less costly."},
+  {name:"Qwen3 30B-A3B", w:18.6, fit:"bad", tps:"12–20", note:"MoE; use --n-cpu-moe to keep attention layers on the GPU."},
+];
+const fitLabel = {good:"✓ Fits", warn:"◐ Tight", bad:"↘ Offload"};
+const pct = v => (v / MAX * 100) + "%";
+
+const rows = document.getElementById("rows");
+models.forEach(m => {
+  const total = +(m.w + OVER).toFixed(1);
+  const r = document.createElement("div");
+  r.className = "row";
+  r.innerHTML = `<span class="lab">${m.name}</span>
+    <div class="track" title="${m.name}: ${m.w} GB weights + ~${OVER} GB cache/overhead = ~${total} GB (${fitLabel[m.fit]})">
+      <div class="bar" style="width:${pct(total)};background:none">
+        <div class="w" style="width:${m.w/total*100}%;background:var(--bar);border-radius:0"></div>
+        <div class="kv" style="flex:1"></div>
+      </div>
+      <span class="val" style="left:${pct(total)}">${total} GB</span>
+    </div>`;
+  rows.appendChild(r);
+});
+// limit line positioned in the track column
+const lim = document.createElement("div");
+lim.className = "limit";
+rows.appendChild(lim);
+function placeLimit(){
+  const t = rows.querySelector(".track");
+  const x = t.offsetLeft + t.offsetWidth * LIMIT / MAX;
+  lim.style.left = x + "px";
+}
+lim.innerHTML = "<span>8 GB</span>";
+placeLimit(); addEventListener("resize", placeLimit);
+
+const ticks = document.getElementById("ticks");
+for (let v = 0; v <= MAX; v += 4) {
+  const s = document.createElement("span");
+  s.style.left = pct(v); s.textContent = v;
+  ticks.appendChild(s);
+}
+
+const tb = document.getElementById("tbody");
+models.concat([{name:"Llama 3.3 70B", w:42.5, fit:"bad", tps:"1–2", note:"Does not fit; almost entirely on the CPU."}]).forEach(m => {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td><span class="m">${m.name}</span></td>
+    <td class="n">${m.w.toFixed(1)} GB</td>
+    <td><span class="pill ${m.fit}">${fitLabel[m.fit]}</span></td>
+    <td class="n">${m.tps}</td>
+    <td>${m.note}</td>`;
+  tb.appendChild(tr);
+});
+</script>
+</html>

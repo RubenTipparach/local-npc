@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bramblewick</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;600&family=Nunito:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <canvas id="game" aria-label="The town of Bramblewick"></canvas>
+
+  <header class="hud">
+    <div class="brand">
+      <span class="town">Bramblewick</span>
+      <span class="clock" id="clock">9:00 AM</span>
+    </div>
+    <div class="picker">
+      <label for="model">Model</label>
+      <select id="model"></select>
+      <span id="model-state" class="state idle">…</span>
+      <button id="reset-all" class="ghost" title="Clear every conversation">Reset talks</button>
+    </div>
+    <div class="mystery-buttons">
+      <button id="open-case" class="case-btn" hidden>Case file</button>
+      <button id="new-mystery" class="case-btn dark">New mystery</button>
+    </div>
+    <div class="notes" id="model-notes"></div>
+  </header>
+
+  <div class="controls">
+    <span><kbd>WASD</kbd>/<kbd>↑↓←→</kbd> walk</span>
+    <span><kbd>Shift</kbd> run</span>
+    <span><kbd>E</kbd> talk / inspect</span>
+    <span><kbd>1</kbd>–<kbd>3</kbd> pick reply</span>
+    <span><kbd>T</kbd> type your own</span>
+    <span><kbd>Esc</kbd> leave</span>
+  </div>
+
+  <div id="toast" class="toast" hidden>
+    <p id="toast-text"></p>
+    <span class="hint"><kbd>E</kbd> close</span>
+  </div>
+
+  <section id="dialogue" class="dialogue" hidden aria-live="polite">
+    <div class="dlg-head">
+      <canvas id="portrait" width="64" height="64"></canvas>
+      <div class="who-block">
+        <div id="dlg-name" class="dlg-name"></div>
+        <div id="dlg-title" class="dlg-title"></div>
+      </div>
+      <div class="dlg-actions">
+        <button id="show-agent" class="ghost" title="See the agent.md this villager is running">agent.md</button>
+        <button id="reset-talk" class="ghost" title="Start this conversation over">Restart</button>
+        <button id="close-dialogue" class="ghost" title="Leave (Esc)">Leave</button>
+      </div>
+    </div>
+    <div id="log" class="log"></div>
+    <div id="choices" class="choices"></div>
+    <form id="free" class="free">
+      <kbd>T</kbd>
+      <input id="free-input" type="text" placeholder="Or say something else…" autocomplete="off" maxlength="400">
+      <button type="submit">Say</button>
+    </form>
+    <div id="meta" class="meta"></div>
+  </section>
+
+  <aside id="agent-panel" class="agent-panel" hidden>
+    <header>
+      <div>
+        <div class="eyebrow">Villager script</div>
+        <code id="agent-file"></code>
+      </div>
+      <button id="agent-close" class="ghost">Close</button>
+    </header>
+    <p class="agent-note">Edit this file and the change applies on the villager's next reply. No restart needed.</p>
+    <pre id="agent-md"></pre>
+    <details>
+      <summary>Full system prompt sent to the model</summary>
+      <pre id="system-prompt"></pre>
+    </details>
+  </aside>
+
+  <div id="setup" class="modal-backdrop" hidden>
+    <form id="setup-form" class="modal">
+      <div class="eyebrow">Director mode</div>
+      <h2>A death in Bramblewick</h2>
+      <p>The director picks a victim and a killer from the villagers and gives everyone an alibi. Question people, compare their stories, then accuse the killer. Every case is different.</p>
+      <fieldset>
+        <legend>Difficulty</legend>
+        <label class="diff"><input type="radio" name="difficulty" value="easy"> <span><b>Easy</b>Everyone but the killer tells the truth. The killer claims to have been with someone who can prove them wrong.</span></label>
+        <label class="diff"><input type="radio" name="difficulty" value="normal" checked> <span><b>Normal</b>One innocent villager lies to protect a secret. A witness saw the killer's face.</span></label>
+        <label class="diff"><input type="radio" name="difficulty" value="hard"> <span><b>Hard</b>Two innocent liars. The witness only saw a hat or a beard. The clue at the scene fits more than one person.</span></label>
+      </fieldset>
+      <p class="fine" id="setup-model"></p>
+      <p class="fine error" id="setup-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" id="setup-cancel" class="ghost">Cancel</button>
+        <button type="submit" id="setup-go" class="primary">Write the case</button>
+      </div>
+    </form>
+  </div>
+
+  <aside id="case-panel" class="case-panel" hidden>
+    <header>
+      <div>
+        <div class="eyebrow" id="case-difficulty">Case file</div>
+        <h2 id="case-title"></h2>
+      </div>
+      <button id="case-close" class="ghost">Close</button>
+    </header>
+    <p id="case-discovery" class="discovery"></p>
+    <dl class="facts">
+      <div><dt>Who</dt><dd id="case-victim"></dd></div>
+      <div><dt>Where</dt><dd id="case-scene"></dd></div>
+      <div><dt>When</dt><dd id="case-window"></dd></div>
+      <div><dt>How</dt><dd id="case-weapon"></dd></div>
+    </dl>
+    <h3>Leads</h3>
+    <ul class="leads" id="case-leads"></ul>
+    <h3>Suspects</h3>
+    <ul class="suspects" id="case-suspects"></ul>
+    <section id="case-solution" hidden></section>
+    <div class="case-foot">
+      <span class="fine" id="case-source"></span>
+      <button id="case-end" class="ghost">New case</button>
+    </div>
+  </aside>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
