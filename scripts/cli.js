@@ -5,10 +5,10 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
+import { PREFERRED, client, findNpc, wire, tidy, partial, holdBack, first, cap } from "./game-client.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SETTINGS = path.join(ROOT, "data", "cli.json");
-const PREFERRED = ["qwen3-8b", "llama-3.1-8b", "qwen3-4b-2507", "llama-3.2-3b", "gemma-3-4b", "tinyllama-1.1b"];
 
 const color = !process.env.NO_COLOR && process.stdout.isTTY;
 const paint = (code) => (s) => (color ? `\x1b[${code}m${s}\x1b[0m` : String(s));
@@ -81,7 +81,7 @@ export async function runCli(base) {
         const text = state.showOptions && n >= 1 && n <= state.options.length ? state.options[n - 1] : line;
         await say(api, state, text);
       } else {
-        const npc = findNpc(state, line);
+        const npc = findNpc(state.npcs, line);
         if (npc) await talkTo(api, state, npc);
         else if (line.includes(" ")) console.log(dim("You're not talking to anyone yet. Type a villager's number or name first."));
         else console.log(dim("Nobody by that name. /people lists everyone."));
@@ -191,13 +191,6 @@ async function useModel(api, state, id) {
 
 // ---- conversation ---------------------------------------------------------------------------
 
-function findNpc(state, text) {
-  const n = Number(text);
-  if (n >= 1 && n <= state.npcs.length) return state.npcs[n - 1];
-  const t = text.toLowerCase();
-  return state.npcs.find((p) => p.name.toLowerCase().split(" ").some((w) => w.startsWith(t)) || p.id.startsWith(t));
-}
-
 async function talkTo(api, state, npc) {
   state.npc = npc;
   state.options = [];
@@ -234,9 +227,8 @@ async function reply(api, state) {
   // (stage direction) or closing quote, so nothing printed ever has to be taken back.
   let raw = "", printed = 0, stats = null;
   const flush = (final) => {
-    let text = tidy(raw, npc.name, final);
-    if (!final) text = text.replace(/[(*][^)*]*$/, "").replace(/"$/, "");
-    if (!final && printed === 0 && text.length < 24 && !raw.includes("\n")) return;
+    const text = final ? tidy(raw, npc.name, true) : partial(raw, npc.name);
+    if (!final && printed === 0 && holdBack(text, raw)) return;
     if (text.length > printed) {
       quiet();
       process.stdout.write(text.slice(printed));
@@ -327,22 +319,6 @@ function histories(state) {
   if (!state.histories.has(state.npc.id)) state.histories.set(state.npc.id, []);
   return state.histories.get(state.npc.id);
 }
-
-const wire = (history) => history.map((m) => (m.opener ? { role: "user", opener: true } : { role: m.role, content: m.content }));
-
-// Small models sometimes prefix their own name, add (stage directions) or *actions*, or wrap the
-// line in quotes. The trailing quote is only dropped once the reply is complete.
-function tidy(text, name, final) {
-  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const t = text
-    .replace(/^\s+/, "")
-    .replace(new RegExp(`^(${esc(name)}|${esc(first({ name }))})\\s*:\\s*`, "i"), "")
-    .replace(/\s*(\([^)\n]{1,80}\)|\*[^*\n]{1,80}\*)/g, "")
-    .replace(/^"/, "");
-  return final ? t.replace(/"\s*$/, "").trim() : t;
-}
-
-const first = (npc) => npc.name.split(" ")[0];
 
 // ---- director mode --------------------------------------------------------------------------
 
@@ -447,8 +423,6 @@ function printCaseFile(state) {
   if (state.mystery.solution) printSolution(state.mystery);
 }
 
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-
 function printSolution(c) {
   const s = c.solution;
   console.log(`${bold("What happened:")} at ${s.murderTime}. ${s.motive}`);
@@ -512,34 +486,4 @@ function loadSettings() {
 function saveSettings(patch) {
   fs.mkdirSync(path.dirname(SETTINGS), { recursive: true });
   fs.writeFileSync(SETTINGS, JSON.stringify({ ...loadSettings(), ...patch }, null, 2));
-}
-
-function client(base) {
-  const req = async (method, p, body, signal) => {
-    const r = await fetch(base + p, { method, headers: { "Content-Type": "application/json" }, body: body && JSON.stringify(body), signal });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-    return data;
-  };
-  return {
-    get: (p) => req("GET", p),
-    post: (p, body) => req("POST", p, body || {}),
-    async *stream(p, body, signal) {
-      const r = await fetch(base + p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
-      const decoder = new TextDecoder();
-      let buf = "";
-      for await (const chunk of r.body) {
-        buf += decoder.decode(chunk, { stream: true });
-        let i;
-        while ((i = buf.indexOf("\n\n")) !== -1) {
-          const block = buf.slice(0, i);
-          buf = buf.slice(i + 2);
-          const event = /^event: (.*)$/m.exec(block)?.[1];
-          const data = /^data: (.*)$/m.exec(block)?.[1];
-          if (event && data) yield { event, data: JSON.parse(data) };
-        }
-      }
-    },
-  };
 }
