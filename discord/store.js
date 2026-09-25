@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CONFIG = path.join(ROOT, "data", "discord.json");
+const PUBLIC_URL = path.join(ROOT, "data", "public-url.json"); // written by scripts/tunnel.js
 const STATE = path.join(ROOT, "data", "discord-state.json");
 
 function readJson(file) {
@@ -81,4 +82,16 @@ export function stateSaver(state) {
     if (!timer) timer = setTimeout(now, 250);
   };
   return { soon, now };
+}
+
+// The view-only public link to the game, while `npm run tunnel` (or --tunnel) has one open.
+export function publicLink() {
+  const f = readJson(PUBLIC_URL);
+  if (!f?.url) return null;
+  try {
+    process.kill(f.pid, 0); // still running? (throws if the process that opened it is gone)
+  } catch (e) {
+    if (e.code === "ESRCH") return null;
+  }
+  return f.url;
 }

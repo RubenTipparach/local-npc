@@ -14,7 +14,7 @@
 
 import { ActivityType, Client, Events, GatewayIntentBits, REST, Routes, SnowflakeUtil, Status } from "discord.js";
 import { client as gameClient } from "../scripts/game-client.js";
-import { loadConfig, saveConfig, loadState, stateSaver } from "./store.js";
+import { loadConfig, saveConfig, loadState, stateSaver, publicLink } from "./store.js";
 import { ChannelLock } from "./lock.js";
 import { COMMANDS, onInteraction, onMessage } from "./commands.js";
 import { refresh, pickModel, thinking, loadModel, modelName, Busy, Closed } from "./table.js";
@@ -234,6 +234,7 @@ class Bot {
     return this.#statusQueue(async () => {
       if (!this.channel) return;
       this.statusNotes = notes;
+      this.lastLink = publicLink();
       const old = this.state.statusMessageId;
       try {
         const msg = await this.channel.send({ content: this.#statusText(kind), allowedMentions: { parse: [] } });
@@ -261,6 +262,7 @@ class Bot {
       mystery: this.mystery,
       model: this.state.modelId && modelName(this),
       canRead: this.canRead,
+      link: publicLink(),
       notes: this.statusNotes || [],
     });
   }
@@ -344,8 +346,11 @@ class Bot {
     } catch (e) {
       return this.apiFailed(e);
     }
-    // A case started or solved from the browser or text mode.
-    if (this.started && caseKey(this.mystery) !== before) {
+    // A case started or solved from the browser or text mode, or a watch link opened or closed.
+    const link = publicLink();
+    const linkChanged = link !== this.lastLink;
+    this.lastLink = link;
+    if (this.started && (caseKey(this.mystery) !== before || linkChanged)) {
       this.presence();
       await this.updateStatus();
     }

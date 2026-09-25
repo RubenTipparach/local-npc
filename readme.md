@@ -47,7 +47,9 @@ Run Bramblewick in a channel of your Discord server, from your own computer. The
 1. Double-click **`discord.bat`** (or run `npm run discord`). The first time, it installs the Discord library and walks you through making a bot in the [Discord Developer Portal](https://discord.com/developers/applications): you paste the bot's token and it prints the link that invites the bot to your server. The token is saved in `data/discord.json`, which is git-ignored.
 2. In the channel you want to play in, type `/setup`. The bot replies with a checklist of what works.
 
-That's all. From then on, `discord.bat` starts the game server and the bot together, and Ctrl+C (or closing the window) closes the town. Run `npm run discord:setup` to paste a new token.
+That's all. From then on, `discord.bat` starts the game server and the bot together, and Ctrl+C (or closing the window) closes the town. Run `npm run discord:setup` to paste a new token. The full walkthrough, with every local URL, the permissions and troubleshooting, is in [docs/discord-integration.md](docs/discord-integration.md).
+
+The bot needs no public URL: it connects out to Discord, so nothing on the laptop is opened to the internet. To let players watch the town in a browser anyway, `npm run tunnel` (or `discord.bat --tunnel`) mirrors a view-only copy of the game to a public HTTPS link through Cloudflare Tunnel or ngrok, and the bot posts that link. Talking, cases, model switching and `/v1` stay on the laptop.
 
 The invite link asks for View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Add Reactions and **Manage Roles**. Manage Roles is only used to lock the play channel while a villager is thinking; the bot only ever changes that channel's Send Messages setting. Also turn on **Message Content Intent** in the portal's Bot tab so players can just type to talk; without it they use `/say`.
 

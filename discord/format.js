@@ -3,6 +3,7 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, escapeMarkdown } from "discord.js";
 import { cap } from "../scripts/game-client.js";
+import { publicLink } from "./store.js";
 
 export const esc = (s) => escapeMarkdown(String(s ?? ""));
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
@@ -166,7 +167,7 @@ export function agentEmbed(npc) {
 const at = (ms, style = "R") => `<t:${Math.floor(ms / 1000)}:${style}>`;
 
 // The one status message the bot keeps at the bottom of the play channel: open, closed, asleep.
-export function statusText(kind, { hostId, since, mystery, model, canRead, notes = [] }) {
+export function statusText(kind, { hostId, since, mystery, model, canRead, link, notes = [] }) {
   const host = hostId ? `<@${hostId}>'s` : "the host's";
   const now = Date.now();
   const lines = [];
@@ -175,6 +176,8 @@ export function statusText(kind, { hostId, since, mystery, model, canRead, notes
     const bits = [mystery ? `Case: *${esc(mystery.title)}* (${mystery.difficulty}${mystery.accused ? ", solved" : ""})` : "No case yet: start one with `/mystery`"];
     if (model) bits.push(`Model: ${esc(model)}`);
     lines.push(bits.join(" · "));
+    // Angle brackets keep Discord from unfurling the page into a big preview.
+    if (link) lines.push(`🌐 Watch the town: <${link}>`);
     lines.push(`-# Runs on ${host} laptop, so the town is only open while it's on. Open since ${at(since, "t")}.`);
     lines.push(
       canRead
@@ -220,6 +223,7 @@ export function statusEmbed(bot) {
       { name: "Talking to", value: talking ? esc(talking.name) : "Nobody", inline: true },
       { name: "Suggested replies", value: bot.state.showOptions ? "On" : "Off", inline: true },
       { name: "Play channel", value: bot.channel ? `<#${bot.channel.id}>` : "Not set up (`/setup`)", inline: true },
+      { name: "Watch link", value: publicLink() ? `<${publicLink()}> (view only)` : "None (the host can open one with `npm run tunnel`)", inline: false },
       { name: "Chat lock while thinking", value: bot.lock.available ? "✅ Working" : `⚠️ Off: ${bot.lock.problem}`, inline: false },
       { name: "Typing to talk", value: bot.canRead ? "✅ On" : "⚠️ Off: turn on the Message Content intent in the Developer Portal (Bot tab). `/say` works meanwhile.", inline: false },
     );

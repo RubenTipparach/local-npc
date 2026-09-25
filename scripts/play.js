@@ -3,6 +3,7 @@
 //   node scripts/play.js             start and open the browser
 //   node scripts/play.js --cli       play in this terminal instead (text mode; /quit to exit)
 //   node scripts/play.js --discord   run the Discord bot (first run walks through setup; Ctrl+C closes the town)
+//   node scripts/play.js --tunnel    also open a view-only public link to the game (see scripts/tunnel.js)
 //   node scripts/play.js --no-open   start without opening a browser
 
 import fs from "node:fs";
@@ -17,6 +18,7 @@ const LLAMA_SERVER = process.env.LLAMA_SERVER || path.join(ROOT, "runtime", "lla
 const MODELS_DIR = path.join(ROOT, "models");
 const CLI = process.argv.slice(2).some((a) => a === "--cli" || a === "cli");
 const DISCORD = process.argv.slice(2).some((a) => a === "--discord" || a === "discord");
+const TUNNEL = process.argv.includes("--tunnel");
 
 function fail(message) {
   console.error(`\n${message}`);
@@ -55,6 +57,7 @@ async function main() {
     if (!CLI) {
       console.log(`The game is already running at ${URL}. Opening it.`);
       openBrowser();
+      await openLink();
       return;
     }
   } else {
@@ -79,6 +82,22 @@ async function main() {
 
   console.log(`\nPlay at ${URL}   (Ctrl+C to stop)\n`);
   openBrowser();
+  await openLink();
+}
+
+// --tunnel: a view-only public link to the game (scripts/tunnel.js). Never fatal: without a tunnel
+// program installed, the game just runs without a link.
+async function openLink() {
+  if (!TUNNEL) return null;
+  const { openTunnel, describe } = await import("./tunnel.js");
+  try {
+    const link = await openTunnel({ gameUrl: URL, onDrop: () => console.error("The public link closed. Run npm run tunnel to open a new one.") });
+    console.log(`\n${describe(link, URL)}\n`);
+    return link;
+  } catch (e) {
+    console.error(`\nNo public link: ${e.message}\n`);
+    return null;
+  }
 }
 
 // Browser mode shows the server's output here. Text mode and the Discord bot send it to
@@ -180,6 +199,7 @@ async function runDiscord() {
 
   const { createBot } = await import("../discord/bot.js");
   const bot = createBot({ base: URL, server: supervisor });
+  let link = null;
   const stop = async (code = 0) => {
     if (shuttingDown) return;
     shuttingDown = true;
@@ -189,6 +209,7 @@ async function runDiscord() {
     } catch (e) {
       console.error(e.message);
     }
+    await link?.close();
     const child = supervisor.child;
     if (child) {
       await shutdown(child);
@@ -199,6 +220,7 @@ async function runDiscord() {
   // Ctrl+C, closing the window (SIGHUP on Windows), Ctrl+Break, or a service manager stopping us.
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) process.on(sig, () => stop(0));
 
+  link = await openLink();
   console.log("Press Ctrl+C to close the town.");
   try {
     await bot.start();

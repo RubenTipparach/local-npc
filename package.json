@@ -16,7 +16,8 @@
     "setup:models": "node scripts/download.js models",
     "discord": "node scripts/play.js --discord",
     "discord:setup": "node discord/setup.js",
-    "test:discord": "node test/discord-bot.test.js"
+    "test:discord": "node test/discord-bot.test.js",
+    "tunnel": "node scripts/tunnel.js"
   },
   "dependencies": {
     "discord.js": "^14.27.0"

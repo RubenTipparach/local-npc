@@ -42,7 +42,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function sandbox() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bramblewick-"));
-  for (const d of ["server", "npcs", "config", "scripts", "discord", "test"]) fs.cpSync(path.join(REPO, d), path.join(dir, d), { recursive: true });
+  for (const d of ["server", "npcs", "config", "scripts", "discord", "test", "public"]) fs.cpSync(path.join(REPO, d), path.join(dir, d), { recursive: true });
   fs.copyFileSync(path.join(REPO, "package.json"), path.join(dir, "package.json"));
   fs.symlinkSync(path.join(REPO, "node_modules"), path.join(dir, "node_modules"), "dir");
   fs.mkdirSync(path.join(dir, "models"));
@@ -53,8 +53,8 @@ function sandbox() {
   return dir;
 }
 
-function startBot(dir, mock, extraEnv = {}) {
-  const p = spawn(process.execPath, ["scripts/play.js", "--discord"], {
+function startBot(dir, mock, extraEnv = {}, extraArgs = []) {
+  const p = spawn(process.execPath, ["scripts/play.js", "--discord", ...extraArgs], {
     cwd: dir,
     detached: true, // its own process group, so "Ctrl+C" reaches the game server too, like a console
     stdio: ["ignore", "pipe", "pipe"],
@@ -378,6 +378,52 @@ async function main() {
     await step("stops cleanly again", async () => {
       process.kill(-bot.pid, "SIGINT");
       assert.equal((await bot.exited).code, 0);
+    });
+
+    await step("--tunnel: a view-only watch link in the status message, gone again on Ctrl+C", async () => {
+      // A stand-in for cloudflared that hands out a link and then just stays up.
+      const bin = path.join(dir, "fakebin");
+      fs.mkdirSync(bin, { recursive: true });
+      fs.writeFileSync(
+        path.join(bin, "cloudflared"),
+        '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "cloudflared 2026.9.0"; exit 0; fi\necho "INF |  https://quiet-town-test.trycloudflare.com  |" >&2\nexec sleep 100000\n',
+        { mode: 0o755 },
+      );
+      const mirrorPort = GAME_PORT + 7;
+      const b = startBot(dir, mock, { PATH: `${bin}:${process.env.PATH}`, MIRROR_PORT: String(mirrorPort) }, ["--tunnel"]);
+      const linkFile = path.join(dir, "data", "public-url.json");
+      try {
+        await mock.waitFor("status with the link", () => statusMessage(mock)?.content.includes("🌐 Watch the town: <https://quiet-town-test.trycloudflare.com>"), 20000);
+        assert.match(b.log, /http:\/\/127\.0\.0\.1:\d+\/\s+->\s+https:\/\/quiet-town-test\.trycloudflare\.com\//);
+        assert.match(text(await answer(mock, mock.command("status"))), /quiet-town-test.*view only/);
+
+        // The mirror: the town can be looked at, nothing else.
+        const at = (p, init) => fetch(`http://127.0.0.1:${mirrorPort}${p}`, init);
+        const page = await at("/");
+        assert.equal(page.status, 200);
+        assert.match(await page.text(), /This link is view only/);
+        assert.equal((await at("/js/main.js")).status, 200);
+        assert.equal((await at("/api/case")).status, 200);
+        const villager = await (await at(`/api/npcs/${npc.id}`)).json();
+        assert.ok(villager.raw.includes(npc.name));
+        assert.match(villager.systemPrompt, /Hidden on the shared link/);
+        assert.doesNotMatch(JSON.stringify(villager), /Your role|You killed/);
+        const post = (p, body) => at(p, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const talk = await post("/api/talk", { model: "fake-model", npc: npc.id, history: [] });
+        assert.equal(talk.status, 403);
+        assert.match((await talk.json()).error, /view-only link/);
+        for (const [p, body] of [["/api/options", {}], ["/api/case", { difficulty: "easy" }], ["/api/case/accuse", { suspect: npc.id }], ["/api/case/end", {}], ["/api/models/unload", {}], ["/v1/chat/completions", {}]]) {
+          assert.equal((await post(p, body)).status, 403, `${p} is blocked`);
+        }
+        assert.equal((await at("/v1/models")).status, 403);
+        assert.equal((await post("/api/models/load", { id: "fake-model" })).status, 200, "the model already loaded is fine");
+        assert.equal((await post("/api/models/load", { id: "some-other-model" })).status, 403);
+      } finally {
+        process.kill(-b.pid, "SIGINT");
+        assert.equal((await b.exited).code, 0);
+      }
+      assert.ok(!fs.existsSync(linkFile), "the link is forgotten");
+      await assert.rejects(fetch(`http://127.0.0.1:${mirrorPort}/`), "the mirror is closed");
     });
 
     await step("without the Message Content intent: slash commands only, and it says so", async () => {
