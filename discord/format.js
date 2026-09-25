@@ -13,8 +13,8 @@ const TOWN_COLOR = 0x6b8e4e;
 // One villager line, in a box the colour of their shirt (their sprite's colour in the browser
 // game). `head` is a line above the box: who walked up, or what a player said when the channel
 // doesn't already show it (a button, a picked number, /say). `note` is the small print underneath.
-export function villagerPost(npc, text, { head, note, streaming, earlier } = {}) {
-  const said = text ? `${earlier ? "*(earlier)* " : ""}${esc(text)}${streaming ? " ▍" : ""}` : "*…*";
+export function villagerPost(npc, text, { head, note, earlier, thinking } = {}) {
+  const said = thinking ? `💭 *${esc(npc.name)} is thinking…*` : `${earlier ? "*(earlier)* " : ""}${esc(text)}`;
   const box = new EmbedBuilder().setColor(shirtColor(npc)).setAuthor({ name: clip(`${npc.name}, ${npc.title}`, 256) }).setDescription(clip(said, 4000));
   if (note) box.setFooter({ text: clip(note, 2048) });
   return { content: head ? clip(head, 2000) : "", embeds: [box] };

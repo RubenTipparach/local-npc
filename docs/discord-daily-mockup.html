@@ -58,6 +58,7 @@
     /* Villager boxes: each villager's shirt colour from agent.md, lightened a little. */
     --v-wen: #80978d;
     --v-bot-down: #da373c;
+    --town: #6b8e4e;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -159,6 +160,30 @@
   .etitle { font-weight: 700; color: var(--bright); margin-bottom: 6px; }
   .eauthor { font-size: 13px; font-weight: 600; color: var(--bright); margin-bottom: 4px; }
   .lockchip { font-size: 12px; font-weight: 600; color: var(--on-accent); background: var(--red); border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
+  .lockchip.open { background: var(--green); }
+  .sim { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 14px; }
+  .sim b { color: var(--bright); }
+  .speed { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; color: var(--muted); }
+  .sim button { background: var(--chrome); color: var(--text); border: 1px solid var(--chrome-line); border-radius: 14px; padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .sim button[aria-pressed="true"], #replay { background: var(--blurple); border-color: var(--blurple); color: var(--on-accent); }
+  .sim button:focus-visible, .btn:focus-visible, .composer input:focus-visible { outline: 2px solid var(--blurple); outline-offset: 2px; }
+  button.btn { border: 0; font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+  button.btn:disabled { cursor: default; }
+  .composer input { width: 100%; background: transparent; border: 0; color: var(--text); font: inherit; outline: none; }
+  .composer input::placeholder { color: var(--faint); }
+  .composer.locked input::placeholder { color: var(--muted); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .typing { margin: -8px 16px 6px; font-size: 12px; color: var(--muted); }
+  .typing b { color: var(--bright); }
+  .dots { display: inline-flex; gap: 3px; vertical-align: middle; }
+  .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: bob 1.2s infinite ease-in-out; }
+  .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes bob { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+  .msg.leaving { transition: opacity .25s, max-height .25s; opacity: 0; }
+  .msg.arrived { animation: arrive .5s ease-out; }
+  @keyframes arrive { from { background: var(--eph); } to { background: transparent; } }
+  .deleted-note { margin: 0 16px 0 68px; font-size: 12px; color: var(--faint); font-style: italic; }
+  @media (prefers-reduced-motion: reduce) { .dots i, .msg.arrived { animation: none; } .msg.leaving { transition: none; } }
   .failed { color: var(--red); font-size: 14px; }
   .edesc { font-size: 14px; }
   .fields { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
@@ -225,6 +250,13 @@
   <div class="tabs" role="tablist" id="tabs"></div>
 </div>
 <p class="caption" id="caption"></p>
+<div class="sim" id="sim">
+  <span><b>Try it:</b> type in the thread as Alice, or click one of Old Wen's suggested replies.</span>
+  <span class="speed" role="group" aria-label="How long Old Wen thinks">Thinking takes
+    <button type="button" data-speed="1000">1 s</button><button type="button" data-speed="3000" aria-pressed="true">3 s</button><button type="button" data-speed="8000">8 s (laptop CPU)</button>
+  </span>
+  <button type="button" id="replay" hidden>▶ Replay</button>
+</div>
 
 <div class="app">
   <nav class="rail" aria-label="Servers">
@@ -243,16 +275,17 @@
 
   <main class="pane">
     <div class="head"><span class="hash">#</span> bramblewick-daily
-      <span class="topic">One murder a day. Question the villagers in today's thread, vote on the case post before midnight Central.</span>
+      <span class="topic">Chat here as usual. Each midnight the bot posts one case; question the villagers in its thread and vote on the post before midnight Central.</span>
     </div>
     <div class="scroll" id="channel"></div>
-    <div class="composer locked">🔒 You do not have permission to send messages in this channel. Talk in today's thread.</div>
+    <div class="composer">Message #bramblewick-daily</div>
   </main>
 
   <section class="pane thread">
     <div class="head" id="threadHead"></div>
     <div class="scroll" id="thread"></div>
-    <div class="composer" id="threadComposer"></div>
+    <div class="typing" id="typing" hidden><span class="dots"><i></i><i></i><i></i></span> <b>Bramblewick</b> is typing…</div>
+    <form class="composer" id="threadComposer"><label class="sr" for="threadInput">Message the thread</label><input id="threadInput" autocomplete="off"></form>
   </section>
 </div>
 
@@ -270,12 +303,12 @@
   <div class="card">
     <h3>How it works in Discord</h3>
     <ul>
-      <li><b>One designated channel.</b> The host runs <code>/setup daily</code> there. Players can't post in the channel itself, only in threads (Send Messages off, Send Messages in Threads on).</li>
+      <li><b>One designated channel, open for chat.</b> The host runs <code>/setup daily</code> there. Players talk in the channel as usual and the villagers ignore it. The bot posts there once a day, the case post, and after that only edits it.</li>
+      <li><b>The bot decides when the thread is open.</b> It opens the thread when the case starts, locks it while a villager is thinking or the server is down, and locks it for good after the reveal. The thread's header always says which, so nobody types into a moment that isn't theirs.</li>
       <li><b>The case post is the ballot.</b> It carries the briefing, a "Pick the killer" menu, and a vote card the bot edits as people vote: who has voted, never for whom.</li>
       <li><b>The thread is the investigation.</b> Everything from the current bot works there: <code>/talk</code>, typing, suggested-reply buttons, <code>//</code> table talk, and private <code>/case</code>, <code>/people</code>, <code>/log</code>.</li>
       <li><b>One post per action.</b> Walking up and the villager's answer are one post, an answer to a typed question is one reply, and votes only update the card on the case post, so the thread stays readable.</li>
       <li><b>Boxes.</b> Every villager line, the leads, the verdict and the status are framed so the story stands out from the players' chat. Each villager's box is their shirt colour.</li>
-      <li><b>The thread locks while a villager thinks</b> (Discord's thread lock) and unlocks by itself when they're done.</li>
       <li><b>Server down.</b> If the game stops on the laptop, the bot answers "the server is down, try again later" and locks the thread. Shutting the laptop down cleanly posts the same, first.</li>
       <li><b>Detectives</b> are everyone who has spoken in today's thread. "4 of 6 have voted" counts them.</li>
       <li><b>At midnight</b> the case post turns into the results, the thread gets the reveal and is locked and archived (still readable), and Day 13 starts.</li>
@@ -362,9 +395,10 @@ function msg(m) {
       ${m.eph ? '<div class="ephnote">👁 Only you can see this · <u>Dismiss message</u></div>' : ""}
     </div></div></div>`;
 }
-const buttons = (list) => `<div class="brow">${list.map(([label, cls = ""]) => `<span class="btn ${cls}">${label}</span>`).join("")}</div>`;
+const buttons = (list) => `<div class="brow">${list.map(([label, cls = "", attrs = ""]) => `<span class="btn ${cls}" ${attrs}>${label}</span>`).join("")}</div>`;
 const replyButtons = (opts, chosen = -1) =>
-  buttons(opts.map((o, i) => [`${i + 1}. ${o}`, chosen === i ? "p off" : chosen >= 0 ? "off" : ""])) + (chosen < 0 ? buttons([["👋 Walk away"]]) : "");
+  `<div class="brow">${opts.map((o, i) => `<button type="button" class="btn ${chosen === i ? "p" : ""}" data-say="${esc(o)}" ${chosen >= 0 ? "disabled" : ""} style="${chosen >= 0 && chosen !== i ? "opacity:.5" : ""}">${i + 1}. ${esc(o)}</button>`).join("")}</div>` +
+  (chosen < 0 ? `<div class="brow"><button type="button" class="btn" data-leave="1">👋 Walk away</button></div>` : "");
 const threadChip = (n, last) => `<div class="chip">🧵 <b>Day ${DAY} · ${CASE}</b> <span class="n">${n} messages ›</span><span class="last">${last}</span></div>`;
 
 // ---- the case post (the thread starter, and the ballot) ---------------------------------------
@@ -400,8 +434,8 @@ const ballot = (open) =>
     : "") +
   buttons([["❓ How it works"], ["🧵 Go to the thread", "link"]]);
 
-function casePost({ voted, waiting, rel, open, n, last }) {
-  return msg({ by: "bot", time: "Today at 12:00 AM", text: "", embeds: [briefing, voteCard(voted, waiting, rel)], comps: ballot(open), chip: threadChip(n, last), pin: "the ballot" });
+function casePost({ voted, waiting, rel, open, n, last, notice }) {
+  return msg({ by: "bot", time: "Today at 12:00 AM", text: "", embeds: [...(notice ? [notice] : []), briefing, voteCard(voted, waiting, rel)], comps: ballot(open), chip: threadChip(n, last), pin: "the bot's one post today" });
 }
 
 const yesterday = msg({
@@ -427,12 +461,21 @@ const wen2 = (buttonsOn, chosen = -1) =>
     embeds: [wen("One walked the long way round Rosa's fields. The other came up from the smithy, heavy-footed as a bull.", "Qwen3 8B · 11.8 tok/s" + (buttonsOn && chosen < 0 ? " · pick a reply or type your own" : ""))],
     comps: buttonsOn ? replyButtons(WEN_OPTS, chosen) : "" });
 const chatter = [msg({ by: "mia", time: "Today at 2:36 PM", text: "// heavy-footed = Gorran, surely. and the scorch mark on the ledger" })];
+const lobby = {
+  afternoon: [msg({ by: "jo", time: "Today at 1:52 PM", text: "anyone started on today's case yet? I've only read the post" }),
+    msg({ by: "sam", time: "Today at 1:55 PM", text: "Alice is grilling Old Wen in the thread. I'm going in after lunch" })],
+  voting: [msg({ by: "mia", time: "Today at 8:58 PM", text: "no spoilers but I'm pretty sure about my vote tonight" }),
+    msg({ by: "jo", time: "Today at 9:01 PM", text: "same. see you all at midnight 🕛" })],
+  offline: [msg({ by: "bob", time: "Today at 3:14 PM", text: "thread's locked, is the town down?" }),
+    msg({ by: "alice", time: "Today at 3:15 PM", text: "yeah, the case post says Ruben's laptop is off. back later I guess" })],
+};
 const downBox = (when) => embed({ color: "var(--v-bot-down)", title: "🔴 The server is down", desc: `{@ruben}'s laptop went offline ${when}, so the town is closed. **Try again later.**\nThe case, the votes and everyone's memories are kept.` });
 
 // ---- the moments of the day --------------------------------------------------------------------
 const STATES = {
   morning: {
     tab: "12:00 AM · the case posts",
+    open: "Open for questions",
     caption: "<b>Midnight.</b> The director has written Day 12. The bot posts it in the channel (the post is also the ballot) and opens a thread on it with the leads. Nobody has voted yet; the reveal is a day away.",
     presence: ["online", `🕵️ Day ${DAY}: ${CASE}`],
     channel: () => [yesterday, `<div class="day">Today</div>`, casePost({ voted: [], waiting: [], rel: "in 24 hours", n: 1, last: "🌅 Day 12. Bramblewick wakes to bad news." })],
@@ -441,29 +484,34 @@ const STATES = {
   },
   afternoon: {
     tab: "2:41 PM · questioning",
+    open: "Open for questions",
     caption: "<b>Afternoon.</b> Six detectives have been in the thread. Four have voted (the card on the case post shows who, never for whom). Alice walked up to Old Wen and his answer came in the same post; Bob's typed question got one reply. Mia is talking to the table with <code>//</code>.",
     presence: ["online", `🕵️ Day ${DAY}: ${CASE}`],
-    channel: () => [yesterday, `<div class="day">Today</div>`, casePost({ voted: ["alice", "bob", "ruben", "mia"], waiting: ["sam", "jo"], rel: "in 9 hours", n: 38, last: "Mia: // heavy-footed = Gorran, surely…" })],
+    channel: () => [yesterday, `<div class="day">Today</div>`, casePost({ voted: ["alice", "bob", "ruben", "mia"], waiting: ["sam", "jo"], rel: "in 9 hours", n: 38, last: "Mia: // heavy-footed = Gorran, surely…" }), ...lobby.afternoon],
     thread: () => [opener, `<div class="day">2:31 PM</div>`, ...wen1, wen2(true), ...chatter],
     composer: ["", `Message #Day ${DAY} · ${CASE}`],
   },
   thinking: {
     tab: "2:44 PM · a villager is thinking",
-    lock: "Locked while Old Wen thinks",
-    caption: "<b>Old Wen is thinking, so the thread is locked.</b> Sam clicked a suggested reply. Nobody can post in the thread until the answer and the next suggestions are in; then it unlocks by itself. The bot's status is red, and a moderator who typed anyway gets a ⏳ and isn't heard.",
-    presence: ["dnd", "💭 Old Wen is thinking…"],
-    channel: () => [yesterday, `<div class="day">Today</div>`, casePost({ voted: ["alice", "bob", "ruben", "mia"], waiting: ["sam", "jo"], rel: "in 9 hours", n: 41, last: "🔒 locked while Old Wen thinks" })],
-    thread: () => [opener, `<div class="day">2:31 PM</div>`, ...wen1, wen2(true, 1), ...chatter,
-      msg({ by: "bot", time: "Today at 2:44 PM", text: "🗨 **Sam:** What time was this?", embeds: [wen("Near ten, by the church bell. The heavy one {caret}", "thinking…")] }),
-      msg({ by: "ruben", time: "Today at 2:44 PM", text: "ask him about the scorch mark!", reacts: ["⏳"] })],
-    composer: ["locked", "🔒 This thread is locked while Old Wen is thinking. It opens again when he's done."],
+    open: "Open for questions",
+    caption: "<b>A villager is thinking.</b> Sam clicks a suggested reply. The bot posts “💭 Old Wen is thinking…”, locks the thread and shows Bramblewick typing. When the answer is ready it deletes that post, posts the answer as a new message and opens the thread again. A moderator who types during the lock gets a ⏳ and isn't heard. Press Replay, or keep asking him yourself.",
+    presence: ["online", `🕵️ Day ${DAY}: ${CASE}`],
+    channel: () => [yesterday, `<div class="day">Today</div>`, casePost({ voted: ["alice", "bob", "ruben", "mia"], waiting: ["sam", "jo"], rel: "in 9 hours", n: 41, last: "Old Wen: Near ten, by the…" })],
+    thread: () => [opener, `<div class="day">2:31 PM</div>`, ...wen1, wen2(true, 1), ...chatter],
+    composer: ["", `Message #Day ${DAY} · ${CASE}`],
+    demo: () => {
+      think({ head: "🗨 **Sam:** What time was this?", line: "What time was this?" });
+      later(Math.min(1200, thinkMs / 2), () => append(msg({ by: "ruben", time: `Today at ${now()}`, text: "ask him about the scorch mark!", reacts: ["⏳"] })));
+    },
   },
   voting: {
     tab: "9:12 PM · voting",
+    open: "Open for questions",
     caption: "<b>Sam is ready.</b> Sam opens the menu on the case post and picks Gorran Ashby. Only Sam sees the confirmation; everyone else sees the card on the case post go to 5 of 6. Nothing extra is posted in the thread.",
     presence: ["online", `🕵️ Day ${DAY}: ${CASE}`],
     channel: () => [yesterday, `<div class="day">Today</div>`,
       casePost({ voted: ["alice", "bob", "ruben", "mia", "sam"], waiting: ["jo"], rel: "in 3 hours", open: true, n: 87, last: "Jo: // I still think it's the farmer…" }),
+      ...lobby.voting,
       msg({ by: "bot", cmd: ["sam", "vote"], eph: true, time: "Today at 9:12 PM", embeds: [embed({ color: "var(--vote)", desc: "🗳 You voted for **Gorran Ashby**. Nobody sees who you picked until midnight, and you can change it any time before then from the same menu." })] })],
     thread: () => [`<div class="day">Earlier</div>`, wen2(false), ...chatter, `<div class="day">9:05 PM</div>`,
       msg({ by: "jo", time: "Today at 9:05 PM", text: "// I still think it's the farmer. the long way round Rosa's fields?" })],
@@ -471,12 +519,13 @@ const STATES = {
   },
   offline: {
     tab: "3:10 PM · the laptop is off",
-    lock: "Server down",
-    caption: "<b>The laptop goes offline.</b> Shutting down cleanly (Ctrl+C, closing the window) posts the red box in both places and locks the thread, so anyone who shows up sees <i>the server is down, try again later</i> instead of talking to nobody. When the laptop is back, the box turns green and the thread unlocks. If the laptop dies without warning, the bot can't post anything; see “Laptop completely off” below.",
+    closed: true,
+    lock: "Locked: the server is down",
+    caption: "<b>The laptop goes offline.</b> Shutting down cleanly (Ctrl+C, closing the window) adds a red box to the top of the case post (an edit, not a new post), says it once in the thread and locks the thread, so anyone who shows up sees <i>the server is down, try again later</i>. The channel stays open, so people keep chatting there. When the laptop is back, the box goes away and the thread unlocks. If the laptop dies without warning, the bot can't post anything; see “Laptop completely off” below.",
     presence: ["offline", ""],
     channel: () => [yesterday, `<div class="day">Today</div>`,
-      casePost({ voted: ["alice", "bob", "ruben", "mia"], waiting: ["sam", "jo"], rel: "in 9 hours", n: 42, last: "🔴 The server is down…" }),
-      msg({ by: "bot", time: "Today at 3:10 PM", embeds: [downBox("{t:3:10 PM}")] })],
+      casePost({ voted: ["alice", "bob", "ruben", "mia"], waiting: ["sam", "jo"], rel: "in 9 hours", n: 42, last: "🔴 The server is down…", notice: downBox("{t:3:10 PM}") }),
+      ...lobby.offline],
     thread: () => [`<div class="day">Earlier</div>`, wen2(false), ...chatter, `<div class="day">3:10 PM</div>`,
       msg({ by: "bot", time: "Today at 3:10 PM", embeds: [downBox("{t:3:10 PM}")] }),
       `<div class="day">If it died without warning</div>`,
@@ -485,6 +534,8 @@ const STATES = {
   },
   midnight: {
     tab: "12:00 AM · the reveal",
+    closed: true,
+    lock: "Locked: case closed",
     caption: "<b>Midnight.</b> Voting closes. Gorran has the most votes, so he's accused, and he didn't do it. The case post turns into the results; the thread gets one reveal post (verdict, solution, where everyone was) and is locked; Day 13 goes up.",
     presence: ["online", "🕵️ Day 13: The Scarecrow's Alibi"],
     channel: () => [
@@ -513,24 +564,149 @@ const STATES = {
   },
 };
 
-// ---- drawing --------------------------------------------------------------------------------
+// ---- simulating Old Wen ----------------------------------------------------------------------
+// What the real bot does for every question: post "💭 Old Wen is thinking…", lock the thread,
+// show "Bramblewick is typing…", then delete that post and post the answer as a new message with
+// fresh suggested replies, and unlock the thread.
+const WEN_REPLIES = [
+  [/time|when|ten|hour|clock|bell/i, "Near ten, by the church bell. The heavy one stopped at the mill door and waited, like he knew someone would come.", ["Who was he waiting for?", "Did you see the other lantern again?", "Thanks, Wen."]],
+  [/gorran|smith|heavy|bull/i, "The smith? Heavy feet, heavy heart, young sprout. But a heavy man leaves deep prints, and the mud by the mill holds only small ones.", ["Whose prints were they?", "Where was Gorran at ten?", "Thanks, Wen."]],
+  [/rosa|farm|field|long way|farmer/i, "Rosa walks her fields at night when the debts keep her up. Last night her lantern went round them twice, then it went out by the mill.", ["How much did she owe him?", "Why would her lantern go out?", "Thanks, Wen."]],
+  [/scorch|ledger|forge|burn|fire/i, "A scorch mark? Only two fires in town burn that hot: the smithy's forge and Rosa's burn pile. The river knows which one was lit.", ["Which one was lit last night?", "Was Gorran at his forge?", "Thanks, Wen."]],
+  [/thank|bye|later|take care|goodbye/i, "Mind the river on your way, young sprout. It remembers who walks beside it.", ["One more question, Wen.", "What does the river remember?", "Goodbye."]],
+  [/prints|small|who|see|saw|waiting|carried|owe|debt|money/i, "Small boots, muddy to the ankle. Farm boots. I've mended enough nets to know a farmer's step from a smith's.", ["Which farmer?", "Why didn't you say so before?", "Thanks, Wen."]],
+];
+const WEN_DEFAULT = [
+  ["Mm. The river remembers, young sprout. Ask it the right question and it answers.", ["What time did you see the lanterns?", "Was the heavy one Gorran?", "Who walked round Rosa's fields?"]],
+  ["Folk walk that bridge at night thinking nobody sees. The river sees.", ["Who crossed the bridge last night?", "What about the scorch mark?", "Thanks, Wen."]],
+];
+let defaults = 0;
+const wenAnswer = (line) => {
+  const hit = WEN_REPLIES.find(([re]) => re.test(line));
+  return hit ? { text: hit[1], opts: hit[2] } : (([text, opts]) => ({ text, opts }))(WEN_DEFAULT[defaults++ % WEN_DEFAULT.length]);
+};
+
 const $ = (id) => document.getElementById(id);
+let current = null;
+let busy = false;
+let thinkMs = 3000;
+let timers = [];
+const later = (ms, fn) => timers.push(setTimeout(fn, ms));
+const now = () => new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+function header({ lock, open, presence }) {
+  const [status, text] = presence;
+  const dot = { online: "var(--green)", dnd: "var(--red)", idle: "var(--yellow)", offline: "var(--faint)" }[status];
+  const chip = lock ? `<span class="lockchip">🔒 ${esc(lock)}</span>` : open ? `<span class="lockchip open">✓ ${esc(open)}</span>` : "";
+  $("threadHead").innerHTML = `${lock ? "🔒" : "🧵"} Day ${DAY} · ${CASE} ${chip}<span class="topic"></span><span class="pres"><span class="dot" style="background:${dot}"></span>Bramblewick <span class="pst">${esc(text || "offline")}</span></span>`;
+  const active = document.querySelector("#threads .sub.on");
+  if (active) active.textContent = `${lock ? "🔒" : "🧵"} ${active.textContent.replace(/^\S+\s/, "")}`;
+}
+
+function composer(locked, text) {
+  $("threadComposer").className = `composer ${locked ? "locked" : ""}`;
+  $("threadInput").disabled = locked;
+  $("threadInput").placeholder = text;
+}
+
+function append(html, cls = "") {
+  const box = document.createElement("div");
+  box.innerHTML = html.trim();
+  const el = box.firstElementChild;
+  if (cls) el.classList.add(cls);
+  $("thread").append(el);
+  $("thread").scrollTop = $("thread").scrollHeight;
+  return el;
+}
+
+// Only the newest answer keeps clickable suggestions; an answered pick stays, greyed out.
+function retireButtons(except) {
+  for (const row of $("thread").querySelectorAll(".comps")) {
+    if (except?.contains(row)) continue;
+    if (row.querySelector("button[data-say]:not(:disabled), button[data-leave]")) row.remove();
+  }
+}
+
+function think({ head, line }) {
+  if (busy) return;
+  busy = true;
+  const s = STATES[current];
+  retireButtons(); // the old suggestions stop working the moment he starts thinking
+  header({ lock: "Locked while Old Wen thinks", presence: ["dnd", "💭 Old Wen is thinking…"] });
+  composer(true, "🔒 Locked while Old Wen is thinking…");
+  $("typing").hidden = false;
+  const thinking = append(msg({ by: "bot", time: `Today at ${now()}`, text: head || "",
+    embeds: [wen("💭 *Old Wen is thinking…*", "The thread is locked until he answers. This post goes away when the answer is posted.")] }));
+  later(thinkMs, () => {
+    $("typing").hidden = true;
+    thinking.classList.add("leaving");
+    later(260, () => {
+      thinking.remove();
+      const { text, opts } = wenAnswer(line || "");
+      const reply = append(msg({ by: "bot", time: `Today at ${now()}`, text: head || "", embeds: [wen(text, "Qwen3 8B · 11.8 tok/s · pick a reply or type your own")], comps: replyButtons(opts) }), "arrived");
+      retireButtons(reply);
+      busy = false;
+      header({ open: "Open for questions", presence: s.presence[0] === "dnd" ? ["online", `🕵️ Day ${DAY}: ${CASE}`] : s.presence });
+      composer(false, `Message #Day ${DAY} · ${CASE}`);
+      $("threadInput").focus({ preventScroll: true });
+    });
+  });
+}
+
+function say(text) {
+  const line = text.trim();
+  if (!line || busy) return;
+  if (line.startsWith("//")) return void append(msg({ by: "alice", time: `Today at ${now()}`, text: line }));
+  append(msg({ by: "alice", time: `Today at ${now()}`, text: line }));
+  think({ line });
+}
+
+$("threadComposer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  say($("threadInput").value);
+  $("threadInput").value = "";
+});
+$("thread").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-say], button[data-leave]");
+  if (!b || busy || STATES[current].closed) return;
+  const row = b.closest(".comps");
+  if (b.dataset.leave) {
+    row?.remove();
+    return void append(msg({ by: "bot", cmd: ["alice", "leave"], time: `Today at ${now()}`, embeds: [embed({ color: "var(--town)", desc: "👋 **Alice** walks away from **Old Wen**." })] }));
+  }
+  const opts = [...row.querySelectorAll("button[data-say]")].map((x) => x.dataset.say);
+  row.innerHTML = replyButtons(opts, opts.indexOf(b.dataset.say));
+  think({ head: `🗨 **Alice:** ${b.dataset.say}`, line: b.dataset.say });
+});
+for (const b of document.querySelectorAll("[data-speed]")) {
+  b.addEventListener("click", () => {
+    thinkMs = Number(b.dataset.speed);
+    for (const x of document.querySelectorAll("[data-speed]")) x.setAttribute("aria-pressed", x === b);
+  });
+}
+$("replay").addEventListener("click", () => show("thinking"));
+
+// ---- drawing --------------------------------------------------------------------------------
 function show(name) {
+  for (const t of timers) clearTimeout(t);
+  timers = [];
+  busy = false;
+  current = name;
   const s = STATES[name];
   for (const b of $("tabs").children) b.setAttribute("aria-pressed", b.dataset.s === name);
   $("caption").innerHTML = s.caption;
   $("channel").innerHTML = s.channel().join("");
   $("thread").innerHTML = s.thread().join("");
-  const [status, text] = s.presence;
-  const dot = { online: "var(--green)", dnd: "var(--red)", idle: "var(--yellow)", offline: "var(--faint)" }[status];
-  const lock = s.lock ? `<span class="lockchip">🔒 ${esc(s.lock)}</span>` : "";
-  $("threadHead").innerHTML = `${s.lock ? "🔒" : "🧵"} Day ${DAY} · ${CASE} ${lock}<span class="topic"></span><span class="pres"><span class="dot" style="background:${dot}"></span>Bramblewick <span class="pst">${esc(text || "offline")}</span></span>`;
-  $("threadComposer").className = `composer ${s.composer[0]}`;
-  $("threadComposer").textContent = s.composer[1];
+  $("typing").hidden = true;
   $("threads").innerHTML =
-    (name === "midnight" ? `<div class="sub on">🧵 Day 13 · The Scarecrow's Alibi</div><div class="sub old">🔒 Day ${DAY} · ${CASE}</div>` : `<div class="sub on">${s.lock ? "🔒" : "🧵"} Day ${DAY} · ${CASE}</div>`) +
+    (name === "midnight" ? `<div class="sub on">🧵 Day 13 · The Scarecrow's Alibi</div><div class="sub old">🔒 Day ${DAY} · ${CASE}</div>` : `<div class="sub on">🧵 Day ${DAY} · ${CASE}</div>`) +
     `<div class="sub old">🔒 Day 11 · The Bell That Rang Twice</div><div class="sub old">🔒 Day 10 · Flour on the Bridge</div>`;
+  header(s);
+  composer(s.composer[0] === "locked", s.composer[1]);
+  $("replay").hidden = name !== "thinking";
+  $("sim").querySelector("span").hidden = !!s.closed;
   for (const el of document.querySelectorAll(".scroll")) el.scrollTop = el.scrollHeight;
+  if (s.demo) s.demo();
   try { localStorage.setItem("bw-daily-tab", name); } catch {}
 }
 for (const [k, s] of Object.entries(STATES)) {

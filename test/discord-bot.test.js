@@ -161,13 +161,19 @@ async function main() {
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
     });
 
-    await step("/talk: everyone sees the villager answer, streamed, with suggested replies", async () => {
-      const msg = await answer(mock, mock.command("talk", { villager: npc.id }));
-      assert.match(msg.content, new RegExp(`walks up to \\*\\*${npc.name}\\*\\*`));
+    await step("/talk: a thinking post while they think, then it's deleted and the answer is posted", async () => {
+      const token = mock.command("talk", { villager: npc.id });
+      const thinking = await answer(mock, token);
+      assert.match(thinking.content, new RegExp(`walks up to \\*\\*${npc.name}\\*\\*`));
+      assert.ok(text(thinking).includes(`💭 *${npc.name} is thinking…*`), "a thinking post first");
+      await mock.waitFor("typing indicator", () => mock.typing > 0);
       const reply = await mock.waitFor("reply buttons", () => npcMessages(mock, npc.name).find((m) => buttons(m).length === 4));
-      assert.equal(reply.id, msg.id, "the walk-up and the answer are one post");
+      assert.ok(mock.deleted.has(thinking.id), "the thinking post is deleted");
+      assert.notEqual(reply.id, thinking.id, "the answer is a new post");
+      assert.equal(reply.content, thinking.content, "with the same line above it");
+      assert.equal(reply.edits, 0, "posted whole, never edited");
+      assert.equal(npcMessages(mock, npc.name).length, 1, "one post left for the walk-up");
       assert.match(reply.embeds[0].description, /What brings you down to the river\?/);
-      assert.ok(reply.edits >= 3, `streamed in several edits (${reply.edits})`);
       assert.deepEqual(
         buttons(reply).map((b) => b.label),
         ["1. Where were you at ten?", "2. Who did you see by the mill?", "3. Thanks, I'll be off.", "Walk away"],
@@ -192,8 +198,11 @@ async function main() {
       const busy = await answer(mock, mock.command("say", { text: "me next" }));
       assert.ok(isPrivate(busy));
       assert.match(busy.content, /⏳ .* is thinking/);
+      const thinkingPost = mock.channelMessages().find((m) => m.message_reference?.message_id === bobs && text(m).includes("is thinking"));
+      assert.ok(thinkingPost, "a thinking post answers Bob right away");
       const reply = await mock.waitFor("answer", () => npcMessages(mock, npc.name).find((m) => text(m).includes('You ask me "where were you last night?"') && buttons(m).length));
       assert.equal(reply.message_reference?.message_id, bobs, "answers Bob's message");
+      assert.ok(mock.deleted.has(thinkingPost.id), "and the thinking post is gone");
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
       assert.ok(!npcMessages(mock, npc.name).some((m) => text(m).includes("hurry up")), "the unheard line never reached the villager");
     });
