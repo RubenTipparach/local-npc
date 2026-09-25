@@ -1,0 +1,521 @@
+<title>Bramblewick Daily Mode</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+  /* Light: Discord's light theme. Dark: its dark theme. Everything below reads these tokens. */
+  :root {
+    --page: #e6e8ec;
+    --rail: #e3e5e8;
+    --side: #f2f3f5;
+    --chat: #ffffff;
+    --thread: #fafafb;
+    --line: #e1e2e4;
+    --text: #313338;
+    --muted: #5c5e66;
+    --faint: #80848e;
+    --bright: #060607;
+    --embed: #f2f3f5;
+    --embed-in-thread: #ebedef;
+    --inset: #ebedef;
+    --hover: #d7d9dc;
+    --rule: #e1e2e4;
+    --ref: #4e5058;
+    --cmd: #4752c4;
+    --link: #006ce7;
+    --mention: rgba(88, 101, 242, .15);
+    --mention-text: #505cdc;
+    --composer: #ebedef;
+    --select: #e3e5e8;
+    --select-line: #d4d7dc;
+    --menu: #ffffff;
+    --opt-hi: #ebedef;
+    --react: #f2f3f5;
+    --react-line: #d4d7dc;
+    --chrome: #ffffff;
+    --chrome-line: #cfd2d7;
+    --card: #ffffff;
+    --card-line: #d4d7dc;
+    --app-line: #cfd2d7;
+    --shadow: rgba(0, 0, 0, .12);
+    --blurple: #5865f2;
+    --on-accent: #ffffff;
+    --grey-btn: #6d6f78;
+    --red: #da373c;
+    --green: #23a55a;
+    --yellow: #f0b232;
+    --case: #8b1e2d;
+    --vote: #c9a227;
+    --ask: #9a6700;
+    --eph: rgba(88, 101, 242, .07);
+    --av-text: #ffffff;
+    --pin-text: #1b1b1b;
+    --c-bot: #4752c4;
+    --c-alice: #b8328e;
+    --c-bob: #0f8a80;
+    --c-ruben: #a86b00;
+    --c-mia: #4d7c0f;
+    --c-sam: #c2410c;
+    --c-jo: #6d4fd6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #16171a; --rail: #1e1f22; --side: #2b2d31; --chat: #313338; --thread: #2b2d31; --line: #26272b;
+      --text: #dbdee1; --muted: #949ba4; --faint: #6d6f78; --bright: #f2f3f5; --embed: #2b2d31; --embed-in-thread: #232428;
+      --inset: #232428; --hover: #404249; --rule: #3f4147; --ref: #b5bac1; --cmd: #c9cdfb; --link: #00a8fc;
+      --mention: rgba(88, 101, 242, .3); --mention-text: #c9cdfb; --composer: #383a40; --select: #1e1f22; --select-line: #1a1b1e;
+      --menu: #2b2d31; --opt-hi: #36373d; --react: #2b2d31; --react-line: #3f4147; --chrome: #232428; --chrome-line: #3a3c42;
+      --card: #1e1f22; --card-line: #2b2d31; --app-line: #0f1012; --shadow: rgba(0, 0, 0, .35); --grey-btn: #4e5058;
+      --ask: #f0b232; --eph: rgba(88, 101, 242, .08); --av-text: #111214;
+      --c-bot: #8ea1ff; --c-alice: #e78bd0; --c-bob: #4fd1c5; --c-ruben: #f0b232; --c-mia: #a3e635; --c-sam: #fb923c; --c-jo: #c4b5fd;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #16171a; --rail: #1e1f22; --side: #2b2d31; --chat: #313338; --thread: #2b2d31; --line: #26272b;
+    --text: #dbdee1; --muted: #949ba4; --faint: #6d6f78; --bright: #f2f3f5; --embed: #2b2d31; --embed-in-thread: #232428;
+    --inset: #232428; --hover: #404249; --rule: #3f4147; --ref: #b5bac1; --cmd: #c9cdfb; --link: #00a8fc;
+    --mention: rgba(88, 101, 242, .3); --mention-text: #c9cdfb; --composer: #383a40; --select: #1e1f22; --select-line: #1a1b1e;
+    --menu: #2b2d31; --opt-hi: #36373d; --react: #2b2d31; --react-line: #3f4147; --chrome: #232428; --chrome-line: #3a3c42;
+    --card: #1e1f22; --card-line: #2b2d31; --app-line: #0f1012; --shadow: rgba(0, 0, 0, .35); --grey-btn: #4e5058;
+    --ask: #f0b232; --eph: rgba(88, 101, 242, .08); --av-text: #111214;
+    --c-bot: #8ea1ff; --c-alice: #e78bd0; --c-bob: #4fd1c5; --c-ruben: #f0b232; --c-mia: #a3e635; --c-sam: #fb923c; --c-jo: #c4b5fd;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text);
+    font: 15px/1.375 "gg sans", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+    padding-inline: 20px; padding-block: 16px 28px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  a { color: var(--link); text-decoration: none; }
+
+  /* ---- mockup chrome (not part of Discord) ---- */
+  .bar { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; }
+  .bar h1 { margin: 0; font-size: 20px; color: var(--bright); text-wrap: balance; }
+  .bar h1 small { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tabs button { background: var(--chrome); color: var(--text); border: 1px solid var(--chrome-line); border-radius: 16px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .tabs button[aria-pressed="true"] { background: var(--blurple); border-color: var(--blurple); color: var(--on-accent); }
+  .tabs button:focus-visible { outline: 2px solid var(--blurple); outline-offset: 2px; }
+  .caption { margin: 0; padding: 10px 14px; background: var(--chrome); border: 1px solid var(--chrome-line); border-radius: 6px; font-size: 14px; max-width: 110ch; }
+  .caption b { color: var(--bright); }
+
+  /* ---- the Discord window ---- */
+  .app { display: grid; grid-template-columns: 72px 232px minmax(0, 1fr) minmax(0, 470px); height: 900px; border-radius: 8px; overflow: hidden; border: 1px solid var(--app-line); }
+  .rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0; }
+  .guild { width: 48px; height: 48px; border-radius: 50%; background: var(--chat); display: grid; place-items: center; font-weight: 700; color: var(--bright); }
+  .guild.on { border-radius: 16px; background: var(--blurple); color: var(--on-accent); }
+  .side { background: var(--side); display: flex; flex-direction: column; min-width: 0; }
+  .side h2 { margin: 0; padding: 14px 16px; font-size: 15px; color: var(--bright); border-bottom: 1px solid var(--line); }
+  .side .cat { padding: 16px 16px 4px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .ch { margin: 1px 8px; padding: 6px 8px; border-radius: 4px; color: var(--muted); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ch.on { background: var(--hover); color: var(--bright); }
+  .ch .hash { font-size: 18px; line-height: 1; }
+  .sub { margin: 1px 8px 1px 30px; padding: 4px 8px; border-radius: 4px; color: var(--muted); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub.on { background: var(--hover); color: var(--bright); }
+  .sub.old { color: var(--faint); }
+  .me { margin-top: auto; background: var(--inset); padding: 8px 10px; display: flex; gap: 8px; align-items: center; font-size: 14px; }
+
+  .pane { display: flex; flex-direction: column; min-width: 0; background: var(--chat); }
+  .pane.thread { background: var(--thread); border-left: 1px solid var(--line); }
+  .head { padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; color: var(--bright); font-weight: 600; min-height: 49px; }
+  .head .topic { color: var(--muted); font-weight: 400; font-size: 13px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .head .hash { color: var(--faint); font-size: 20px; }
+  .pres { font-size: 12px; font-weight: 500; display: flex; gap: 6px; align-items: center; white-space: nowrap; color: var(--text); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .pst { color: var(--muted); font-weight: 400; }
+  .scroll { flex: 1; overflow-y: auto; padding-block: 8px 12px; }
+  .day { display: flex; align-items: center; gap: 8px; margin: 12px 16px 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .day::before, .day::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+
+  .msg { padding: 3px 16px; position: relative; }
+  .msg.eph { background: var(--eph); }
+  .msg.dim { opacity: .6; }
+  .ref { font-size: 13px; color: var(--ref); margin: 0 0 2px 52px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cmd { color: var(--cmd); }
+  .row1 { display: flex; gap: 12px; }
+  .av { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 700; color: var(--av-text); font-size: 17px; }
+  .body { flex: 1; min-width: 0; }
+  .who { font-weight: 600; }
+  .app-tag { background: var(--blurple); color: var(--on-accent); font-size: 10px; border-radius: 3px; padding: 1px 4px; margin-left: 6px; vertical-align: 2px; }
+  .time { color: var(--muted); font-size: 12px; font-weight: 400; margin-left: 8px; }
+  .cont > div { overflow-wrap: anywhere; }
+  .cont b { color: var(--bright); }
+  .small { font-size: 12px; color: var(--muted); }
+  .quote { border-left: 4px solid var(--grey-btn); padding-left: 10px; margin: 2px 0; }
+  code { background: var(--inset); border-radius: 3px; padding: 0 4px; font-size: 13px; }
+  .ts { background: var(--inset); border-radius: 3px; padding: 0 3px; }
+  .mention { background: var(--mention); color: var(--mention-text); border-radius: 3px; padding: 0 2px; }
+  .caret { display: inline-block; width: 8px; height: 16px; background: var(--text); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation: none; } }
+
+  .embed { background: var(--embed); border-left: 4px solid; border-radius: 4px; padding: 10px 14px 12px; margin-top: 6px; max-width: 540px; }
+  .thread .embed { background: var(--embed-in-thread); }
+  .etitle { font-weight: 700; color: var(--bright); margin-bottom: 6px; }
+  .edesc { font-size: 14px; }
+  .fields { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+  .field { flex: 1 1 100%; font-size: 14px; min-width: 0; }
+  .field.inl { flex: 1 1 28%; min-width: 130px; }
+  .fname { font-weight: 700; color: var(--bright); margin-bottom: 2px; }
+  .efoot { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .bars { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 13px; white-space: pre; background: var(--inset); border-radius: 4px; padding: 8px 10px; margin-top: 6px; overflow-x: auto; font-variant-numeric: tabular-nums; }
+
+  .comps { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; max-width: 540px; }
+  .brow { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { padding: 5px 14px; border-radius: 4px; font-size: 14px; font-weight: 500; color: var(--on-accent); background: var(--grey-btn); }
+  .btn.p { background: var(--blurple); } .btn.d { background: var(--red); } .btn.link::after { content: " ↗"; font-size: 11px; }
+  .btn.off { opacity: .5; }
+  .select { background: var(--select); border: 1px solid var(--select-line); border-radius: 4px; padding: 9px 12px; color: var(--muted); display: flex; justify-content: space-between; font-size: 14px; }
+  .select.off { opacity: .5; }
+  .select::after { content: "⌄"; color: var(--text); }
+  .menu { background: var(--menu); border: 1px solid var(--select-line); border-radius: 4px; margin-top: -2px; box-shadow: 0 8px 16px var(--shadow); }
+  .opt { padding: 8px 12px; display: flex; gap: 10px; align-items: center; font-size: 14px; }
+  .opt.hi { background: var(--opt-hi); }
+  .opt .t { color: var(--muted); font-size: 12px; display: block; }
+  .opt .e { font-size: 18px; }
+  .chip { margin-top: 8px; background: var(--inset); border-radius: 6px; padding: 8px 12px; max-width: 540px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  .chip .n { color: var(--link); font-weight: 600; white-space: nowrap; }
+  .chip .last { color: var(--muted); flex: 1 1 160px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .reacts { margin-top: 4px; } .react { background: var(--react); border: 1px solid var(--react-line); border-radius: 8px; padding: 1px 6px; font-size: 13px; }
+  .ephnote { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .ephnote u { color: var(--link); text-decoration: none; }
+  .composer { margin: 0 16px 16px; background: var(--composer); border-radius: 8px; padding: 12px 14px; color: var(--faint); font-size: 15px; }
+  .composer.locked { background: var(--inset); color: var(--muted); }
+  .note-pin { position: absolute; right: 10px; top: 4px; background: var(--vote); color: var(--pin-text); font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 8px; }
+
+  /* ---- design notes (not part of Discord) ---- */
+  .notes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 8px; }
+  @media (max-width: 820px) { .notes { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--card); border: 1px solid var(--card-line); border-radius: 8px; padding: 14px 18px; }
+  .card h3 { margin: 0 0 8px; font-size: 15px; color: var(--bright); text-wrap: balance; }
+  .card ul, .card ol { margin: 0; padding-left: 20px; }
+  .card li { margin: 4px 0; font-size: 14px; max-width: 75ch; }
+  .card li b { color: var(--bright); }
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 8px; }
+  .step { background: var(--inset); border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+  .step b { display: block; color: var(--ask); font-size: 12px; letter-spacing: .02em; }
+  .ask { color: var(--ask); font-weight: 700; }
+
+  @media (max-width: 1180px) {
+    .app { grid-template-columns: 72px minmax(0, 1fr); height: auto; }
+    .side { display: none; }
+    .pane { grid-column: 2; height: 760px; }
+    .pane.thread { border-left: 0; border-top: 1px solid var(--line); }
+    .rail { grid-row: span 2; }
+  }
+  @media (max-width: 640px) {
+    body { padding-inline: 16px; }
+    .app { grid-template-columns: minmax(0, 1fr); }
+    .rail { display: none; }
+    .pane { grid-column: 1; height: 680px; }
+    .ref { margin-left: 0; }
+  }
+</style>
+
+<div class="bar">
+  <h1>Bramblewick daily mode <small>Mockup of the Discord bot: one murder a day, questioned in a thread, voted on, revealed at midnight Central.</small></h1>
+  <div class="tabs" role="tablist" id="tabs"></div>
+</div>
+<p class="caption" id="caption"></p>
+
+<div class="app">
+  <nav class="rail" aria-label="Servers">
+    <div class="guild">🏠</div>
+    <div class="guild on">TT</div>
+    <div class="guild">🎲</div>
+  </nav>
+  <aside class="side">
+    <h2>Test Town</h2>
+    <div class="cat">Text channels</div>
+    <div class="ch"><span class="hash">#</span> general</div>
+    <div class="ch on"><span class="hash">#</span> bramblewick-daily</div>
+    <div id="threads"></div>
+    <div class="me"><span class="av" style="background:var(--c-alice);width:32px;height:32px;font-size:14px">A</span> Alice</div>
+  </aside>
+
+  <main class="pane">
+    <div class="head"><span class="hash">#</span> bramblewick-daily
+      <span class="topic">One murder a day. Question the villagers in today's thread, vote on the case post before midnight Central.</span>
+    </div>
+    <div class="scroll" id="channel"></div>
+    <div class="composer locked">🔒 You do not have permission to send messages in this channel. Talk in today's thread.</div>
+  </main>
+
+  <section class="pane thread">
+    <div class="head" id="threadHead"></div>
+    <div class="scroll" id="thread"></div>
+    <div class="composer" id="threadComposer"></div>
+  </section>
+</div>
+
+<section class="notes">
+  <div class="card" style="grid-column: 1 / -1">
+    <h3>A day in Bramblewick</h3>
+    <div class="flow">
+      <div class="step"><b>12:00 AM Central</b>The director writes a new case. The bot posts it in #bramblewick-daily and opens a thread on it.</div>
+      <div class="step"><b>All day</b>Players question villagers in the thread: <code>/talk</code>, then just type. One villager thinks at a time; the thread locks while they do.</div>
+      <div class="step"><b>When you're ready</b>Pick the killer from the menu on the case post. Votes stay secret; you can change yours until midnight.</div>
+      <div class="step"><b>12:00 AM Central</b>Most votes is accused. The bot reveals the tally and the solution, locks the thread, and posts the next day's case.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>How it works in Discord</h3>
+    <ul>
+      <li><b>One designated channel.</b> The host runs <code>/setup daily</code> there. Players can't post in the channel itself, only in threads (Send Messages off, Send Messages in Threads on).</li>
+      <li><b>The case post is the ballot.</b> It carries the briefing, a "Pick the killer" menu, and a vote card the bot edits as people vote: who has voted, never for whom.</li>
+      <li><b>The thread is the investigation.</b> Everything from the current bot works there: <code>/talk</code>, typing, suggested-reply buttons, <code>//</code> table talk, and private <code>/case</code>, <code>/people</code>, <code>/log</code>.</li>
+      <li><b>Detectives</b> are everyone who has spoken in today's thread. "4 of 6 have voted" counts them, and the bot notes in the thread when someone is ready.</li>
+      <li><b>At midnight</b> the case post turns into the results, the thread gets the reveal and is locked and archived (still readable), and Day 13 starts.</li>
+      <li><b>On-demand mode</b> (the current always-open channel) stays in the code for later; the bot runs daily mode for now.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Decisions to confirm</h3>
+    <ol>
+      <li><span class="ask">Midnight "CST":</span> midnight Central local time (CDT in summer, so 05:00 UTC then) or fixed UTC−6 all year? The mockup assumes Central local time.</li>
+      <li><span class="ask">Ties:</span> the mockup accuses whoever reached the top count first. Alternatives: nobody is accused (the killer walks), or a random pick among the tied.</li>
+      <li><span class="ask">Secret ballot:</span> hidden until midnight so people don't pile onto the leader. Or show live counts?</li>
+      <li><span class="ask">Everyone ready early:</span> reveal as soon as every detective has voted, or always wait for midnight?</li>
+      <li><span class="ask">Laptop off at midnight:</span> the reveal happens when the bot is next online, marked as late. The next case is written then too.</li>
+      <li><span class="ask">No votes at all:</span> reveal anyway ("the killer got away") and move on?</li>
+      <li><span class="ask">Who may vote:</span> anyone in the server, or only people who questioned someone that day?</li>
+    </ol>
+  </div>
+</section>
+
+<script>
+// ---- people and the day's case ----------------------------------------------------------------
+const P = {
+  bot: { name: "Bramblewick", color: "var(--c-bot)", av: "🏘️", bot: true },
+  alice: { name: "Alice", color: "var(--c-alice)" },
+  bob: { name: "Bob", color: "var(--c-bob)" },
+  ruben: { name: "Ruben", color: "var(--c-ruben)" },
+  mia: { name: "Mia", color: "var(--c-mia)" },
+  sam: { name: "Sam", color: "var(--c-sam)" },
+  jo: { name: "Jo", color: "var(--c-jo)" },
+};
+const SUSPECTS = [
+  ["Esme Thistlewood", "the librarian"],
+  ["Gorran Ashby", "the town blacksmith"],
+  ["Juniper Crumb", "a nine-year-old kid"],
+  ["Maribel Crumb", "the baker"],
+  ["Hilda Brambleworth", "the Mayor of Bramblewick"],
+  ["Old Wen", "the fisherman"],
+  ["Rosa Fielding", "a farmer"],
+];
+const CASE = "The Ledger at the Mill";
+const DAY = 12;
+
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function md(s) {
+  return s.split("\n").map((l) => {
+    let cls = "";
+    if (l.startsWith("-# ")) { cls = "small"; l = l.slice(3); }
+    if (l.startsWith("> ")) { cls = "quote"; l = l.slice(2); }
+    l = esc(l)
+      .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+      .replace(/\*(.+?)\*/g, "<i>$1</i>")
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\{t:([^}]+)\}/g, '<span class="ts">$1</span>')
+      .replace(/\{@(\w+)\}/g, (_, k) => `<span class="mention">@${P[k].name}</span>`)
+      .replace(/\{caret\}/g, '<span class="caret"></span>');
+    return `<div class="${cls}">${l || "&nbsp;"}</div>`;
+  }).join("");
+}
+
+// ---- Discord-looking pieces ------------------------------------------------------------------
+function embed({ color, title, desc, fields = [], foot, bars }) {
+  return `<div class="embed" style="border-color:${color}">
+    ${title ? `<div class="etitle">${md(title)}</div>` : ""}
+    ${desc ? `<div class="edesc">${md(desc)}</div>` : ""}
+    ${bars ? `<div class="bars">${esc(bars)}</div>` : ""}
+    ${fields.length ? `<div class="fields">${fields.map((f) => `<div class="field ${f.inline ? "inl" : ""}"><div class="fname">${md(f.name)}</div><div>${md(f.value)}</div></div>`).join("")}</div>` : ""}
+    ${foot ? `<div class="efoot">${esc(foot)}</div>` : ""}</div>`;
+}
+function msg(m) {
+  const a = P[m.by];
+  const ref = m.ref ? `<div class="ref">↱ ${m.ref}</div>` : m.cmd ? `<div class="ref">↱ <span style="color:${P[m.cmd[0]].color}">${P[m.cmd[0]].name}</span> used <span class="cmd">/${m.cmd[1]}</span></div>` : "";
+  return `<div class="msg ${m.eph ? "eph" : ""} ${m.dim ? "dim" : ""}">${m.pin ? `<span class="note-pin">${m.pin}</span>` : ""}${ref}
+    <div class="row1"><div class="av" style="background:${a.color}">${a.av || a.name[0]}</div><div class="body">
+      <div class="who"><span style="color:${a.color}">${a.name}</span>${a.bot ? '<span class="app-tag">APP</span>' : ""}<span class="time">${m.time || ""}</span></div>
+      <div class="cont">${m.text ? md(m.text) : ""}</div>
+      ${(m.embeds || []).join("")}
+      ${m.comps ? `<div class="comps">${m.comps}</div>` : ""}
+      ${m.reacts ? `<div class="reacts">${m.reacts.map((r) => `<span class="react">${r} 1</span>`).join(" ")}</div>` : ""}
+      ${m.chip || ""}
+      ${m.eph ? '<div class="ephnote">👁 Only you can see this · <u>Dismiss message</u></div>' : ""}
+    </div></div></div>`;
+}
+const buttons = (list) => `<div class="brow">${list.map(([label, cls = ""]) => `<span class="btn ${cls}">${label}</span>`).join("")}</div>`;
+const replyButtons = (opts, chosen = -1) =>
+  buttons(opts.map((o, i) => [`${i + 1}. ${o}`, chosen === i ? "p off" : chosen >= 0 ? "off" : ""])) + (chosen < 0 ? buttons([["👋 Walk away"]]) : "");
+const threadChip = (n, last) => `<div class="chip">🧵 <b>Day ${DAY} · ${CASE}</b> <span class="n">${n} messages ›</span><span class="last">${last}</span></div>`;
+
+// ---- the case post (the thread starter, and the ballot) ---------------------------------------
+const briefing = embed({
+  color: "var(--case)",
+  title: `☠ Day ${DAY} · ${CASE}`,
+  desc: "Tully Pennywhistle was found at the Old Mill at dawn, his ledger of who owes what torn to pieces around him.",
+  fields: [
+    { name: "Who", value: "Tully Pennywhistle, the general store owner. Half the town owed him money." },
+    { name: "Where", value: "The Old Mill", inline: true },
+    { name: "When", value: "9 to 11 PM", inline: true },
+    { name: "How", value: "A heavy iron poker", inline: true },
+    { name: "Suspects", value: SUSPECTS.map(([n], i) => `\`${i + 1}\` ${n}`).join("  ") },
+  ],
+  foot: "Normal case · found at 6 AM by Esme Thistlewood · leads are in the thread",
+});
+function voteCard(voted, waiting, rel) {
+  return embed({
+    color: "var(--vote)",
+    title: "🗳 The vote",
+    desc: `**${voted.length} of ${voted.length + waiting.length}** detectives have voted · the truth comes out at midnight Central ({t:${rel}})`,
+    fields: [
+      { name: "Voted", value: voted.length ? voted.map((k) => `✅ ${P[k].name}`).join("  ") : "Nobody yet", inline: true },
+      { name: "Still investigating", value: waiting.length ? waiting.map((k) => `🔎 ${P[k].name}`).join("  ") : "Nobody", inline: true },
+    ],
+    foot: "Votes are secret until midnight. Change yours any time before then.",
+  });
+}
+const ballot = (open) =>
+  `<div class="select ${open === "off" ? "off" : ""}">🗳 Who did it? Pick the killer…</div>` +
+  (open === true
+    ? `<div class="menu">${SUSPECTS.map(([n, t], i) => `<div class="opt ${i === 1 ? "hi" : ""}"><span class="e">🔪</span><span>${n}<span class="t">${t}</span></span></div>`).join("")}</div>`
+    : "") +
+  buttons([["❓ How it works"], ["🧵 Go to the thread", "link"]]);
+
+function casePost({ voted, waiting, rel, open, n, last }) {
+  return msg({ by: "bot", time: "Today at 12:00 AM", text: "", embeds: [briefing, voteCard(voted, waiting, rel)], comps: ballot(open), chip: threadChip(n, last), pin: "the ballot" });
+}
+
+const yesterday = msg({
+  by: "bot", time: "Yesterday at 12:00 AM", dim: true,
+  embeds: [embed({ color: "var(--case)", title: "☠ Day 11 · The Bell That Rang Twice · solved", desc: "✅ The table accused **Maribel Crumb** (4 of 5 votes). She did it.", foot: "Revealed at midnight · the thread is locked and archived" })],
+  chip: `<div class="chip">🧵 <b>Day 11 · The Bell That Rang Twice</b> <span class="n">61 messages ›</span><span class="last">🔒 locked</span></div>`,
+});
+
+// ---- the thread ------------------------------------------------------------------------------
+const opener = msg({ by: "bot", time: "Today at 12:00 AM", text: `🌅 **Day ${DAY}.** Bramblewick wakes to bad news.\nQuestion anyone with \`/talk\`, then just type to talk to them. Start a line with \`//\` to talk among yourselves.\nVote on the case post when you're ready. The truth comes out at **midnight Central**.`,
+  embeds: [embed({ color: "var(--case)", title: "Leads", desc: "• At the scene: a scorch mark on the ledger's last page, as if held near a forge.\n• Esme Thistlewood found the body at 6 AM. Ask what she saw.\n• Someone was out late and saw a figure heading toward the Old Mill. Find out who.\n• Besides the killer, 1 innocent villager is lying to protect a secret." })] });
+const wen1 = [
+  msg({ by: "bot", cmd: ["alice", "talk"], time: "Today at 2:31 PM", text: "🚶 **Alice** walks up to **Old Wen**, the fisherman." }),
+  msg({ by: "bot", time: "Today at 2:31 PM", text: "**Old Wen:** Mm. Tully, gone. The river saw lanterns by the mill last night, young sprout. Two of them.\n-# Qwen3 8B · 11.8 tok/s" }),
+  msg({ by: "bob", time: "Today at 2:33 PM", text: "whose lanterns? did you see who carried them?" }),
+];
+const WEN_OPTS = ["Was the heavy one Gorran?", "What time was this?", "Thanks, Wen. Take care."];
+const wen2 = (buttonsOn, chosen = -1) =>
+  msg({ by: "bot", ref: `<span style="color:${P.bob.color}">@Bob</span> whose lanterns? did you see who carried them?`, time: "Today at 2:33 PM",
+    text: "**Old Wen:** One walked the long way round Rosa's fields. The other came up from the smithy, heavy-footed as a bull.\n-# Qwen3 8B · 11.8 tok/s" + (buttonsOn ? " · pick a reply or type your own" : ""),
+    comps: buttonsOn ? replyButtons(WEN_OPTS, chosen) : "" });
+const chatter = [
+  msg({ by: "mia", time: "Today at 2:36 PM", text: "// heavy-footed = Gorran, surely. and the scorch mark on the ledger" }),
+  msg({ by: "bot", time: "Today at 2:36 PM", text: "-# 🗳 Mia is ready. 4 of 6 detectives have voted." }),
+];
+
+// ---- the five moments of the day -------------------------------------------------------------
+const STATES = {
+  morning: {
+    tab: "12:00 AM · the case posts",
+    caption: "<b>Midnight.</b> The director has written Day 12. The bot posts it in the channel (the post is also the ballot) and opens a thread on it. Nobody has voted yet; the reveal is a day away.",
+    presence: ["online", `🕵️ Day ${DAY}: ${CASE}`],
+    channel: () => [yesterday, `<div class="day">Today</div>`, casePost({ voted: [], waiting: [], rel: "in 24 hours", n: 1, last: "🌅 Day 12. Bramblewick wakes to bad news." })],
+    thread: () => [opener],
+    composer: ["", `Message #Day ${DAY} · ${CASE}`],
+  },
+  afternoon: {
+    tab: "2:41 PM · questioning",
+    caption: "<b>Afternoon.</b> Six detectives have been in the thread. Four have voted (the card shows who, never for whom). Alice and Bob are questioning Old Wen; Mia is talking to the table with <code>//</code>.",
+    presence: ["online", `🕵️ Day ${DAY}: ${CASE}`],
+    channel: () => [yesterday, `<div class="day">Today</div>`, casePost({ voted: ["alice", "bob", "ruben", "mia"], waiting: ["sam", "jo"], rel: "in 9 hours", n: 38, last: "Mia: // heavy-footed = Gorran, surely…" })],
+    thread: () => [opener, `<div class="day">2:31 PM</div>`, ...wen1, wen2(true), ...chatter],
+    composer: ["", `Message #Day ${DAY} · ${CASE}`],
+  },
+  thinking: {
+    tab: "2:44 PM · a villager is thinking",
+    caption: "<b>Old Wen is thinking.</b> Sam clicked a suggested reply. Until the answer and the next suggestions are in, the thread is locked, the bot's status is red, and an admin who typed anyway gets a ⏳.",
+    presence: ["dnd", "💭 Old Wen is thinking…"],
+    channel: () => [yesterday, `<div class="day">Today</div>`, casePost({ voted: ["alice", "bob", "ruben", "mia"], waiting: ["sam", "jo"], rel: "in 9 hours", n: 41, last: "Old Wen: Near ten, by the…" })],
+    thread: () => [opener, `<div class="day">2:31 PM</div>`, ...wen1, wen2(true, 1), ...chatter,
+      msg({ by: "bot", time: "Today at 2:44 PM", text: "> **Sam:** What time was this?\n**Old Wen:** Near ten, by the church bell. The heavy one {caret}" }),
+      msg({ by: "ruben", time: "Today at 2:44 PM", text: "ask him about the scorch mark!", reacts: ["⏳"] }),
+      msg({ by: "bot", ref: `<span style="color:${P.ruben.color}">@Ruben</span> ask him about the scorch mark!`, time: "Today at 2:44 PM", text: "-# ⏳ Old Wen is thinking. Messages sent now aren't heard; say it again when they're done." })],
+    composer: ["locked", "🔒 You do not have permission to send messages in this thread."],
+  },
+  voting: {
+    tab: "9:12 PM · voting",
+    caption: "<b>Sam is ready.</b> Sam opens the menu on the case post and picks Gorran Ashby. Only Sam sees the confirmation; everyone else sees the card go to 5 of 6 and a note in the thread.",
+    presence: ["online", `🕵️ Day ${DAY}: ${CASE}`],
+    channel: () => [yesterday, `<div class="day">Today</div>`,
+      casePost({ voted: ["alice", "bob", "ruben", "mia", "sam"], waiting: ["jo"], rel: "in 3 hours", open: true, n: 87, last: "Jo: // I still think it's the farmer…" }),
+      msg({ by: "bot", cmd: ["sam", "vote"], eph: true, time: "Today at 9:12 PM", text: "🗳 You voted for **Gorran Ashby**. Nobody sees who you picked until midnight, and you can change it any time before then from the same menu." })],
+    thread: () => [`<div class="day">Earlier</div>`, wen2(false), ...chatter, `<div class="day">9:05 PM</div>`,
+      msg({ by: "jo", time: "Today at 9:05 PM", text: "// I still think it's the farmer. the long way round Rosa's fields?" }),
+      msg({ by: "bot", time: "Today at 9:12 PM", text: "-# 🗳 Sam is ready. 5 of 6 detectives have voted." })],
+    composer: ["", `Message #Day ${DAY} · ${CASE}`],
+  },
+  midnight: {
+    tab: "12:00 AM · the reveal",
+    caption: "<b>Midnight.</b> Voting closes. Gorran has the most votes, so he's accused, and he didn't do it. The case post turns into the results, the thread gets the reveal and is locked, and Day 13 goes up.",
+    presence: ["online", "🕵️ Day 13: The Scarecrow's Alibi"],
+    channel: () => [
+      msg({ by: "bot", time: "Yesterday at 12:00 AM", embeds: [
+        embed({ color: "var(--case)", title: `☠ Day ${DAY} · ${CASE} · closed`, desc: "❌ The table accused **Gorran Ashby**. It was **Rosa Fielding**.", bars: "Gorran Ashby   ▰▰▰▰▰▰▰▰▰ 3  accused\nRosa Fielding  ▰▰▰▰▰▰ 2\nMaribel Crumb  ▰▰▰ 1", foot: "6 of 6 voted · revealed at midnight Central" })],
+        comps: `<div class="select off">🗳 Voting closed</div>`,
+        chip: `<div class="chip">🧵 <b>Day ${DAY} · ${CASE}</b> <span class="n">96 messages ›</span><span class="last">🔒 locked · ⚖️ The table accused Gorran Ashby…</span></div>` }),
+      `<div class="day">Today</div>`,
+      msg({ by: "bot", time: "Today at 12:01 AM", embeds: [embed({ color: "var(--case)", title: "☠ Day 13 · The Scarecrow's Alibi", desc: "Rosa's scarecrow was found wearing the Mayor's coat, and the Mayor was found in the pond…", foot: "Hard case · question people in the thread · vote below when you're sure" }), voteCard([], [], "in 24 hours")],
+        comps: ballot(false), chip: `<div class="chip">🧵 <b>Day 13 · The Scarecrow's Alibi</b> <span class="n">1 message ›</span><span class="last">🌅 Day 13. Bramblewick wakes to bad news.</span></div>` }),
+    ],
+    thread: () => [`<div class="day">11:48 PM</div>`,
+      msg({ by: "jo", time: "Yesterday at 11:48 PM", text: "voted. rosa. hope I'm not the only one" }),
+      msg({ by: "bot", time: "Yesterday at 11:48 PM", text: "-# 🗳 Jo is ready. 6 of 6 detectives have voted." }),
+      `<div class="day">Midnight</div>`,
+      msg({ by: "bot", time: "Today at 12:00 AM", text: "⚖️ **Midnight. The votes are in.**\nThe table accused **Gorran Ashby** with 3 of 6 votes.\n❌ **Wrong.** It was **Rosa Fielding**.",
+        embeds: [
+          embed({ color: "var(--case)", title: "The solution: Rosa Fielding did it", desc: "**What happened:** at 10 PM. Tully was about to call in Rosa's debt and take the farm; she met him at the mill to beg, and it went wrong.\n**Gorran Ashby** lied. He was really at the smithy, reforging a lock he'd sold Tully, and was ashamed it had failed." }),
+          embed({ color: "var(--case)", title: "Where everyone really was", fields: [
+            { name: "Rosa Fielding", value: "9 PM: at home\n10 PM: at the Old Mill with Tully\n11 PM: at home", inline: true },
+            { name: "Gorran Ashby", value: "9 PM: at the plaza\n10 PM: at the Smithy\n11 PM: at the Smithy", inline: true },
+            { name: "Old Wen", value: "9 PM: at the Riverbank\n10 PM: at the Riverbank\n11 PM: at the bridge", inline: true },
+          ], foot: "…and the rest of the town" }),
+        ] }),
+      msg({ by: "bot", time: "Today at 12:00 AM", text: "🔒 This case is closed and the thread is locked. **Day 13** is up in #bramblewick-daily." })],
+    composer: ["locked", "🔒 This thread is locked. Only moderators can reply."],
+  },
+};
+
+// ---- drawing --------------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+function show(name) {
+  const s = STATES[name];
+  for (const b of $("tabs").children) b.setAttribute("aria-pressed", b.dataset.s === name);
+  $("caption").innerHTML = s.caption;
+  $("channel").innerHTML = s.channel().join("");
+  $("thread").innerHTML = s.thread().join("");
+  const [status, text] = s.presence;
+  const dot = { online: "var(--green)", dnd: "var(--red)", idle: "var(--yellow)" }[status];
+  $("threadHead").innerHTML = `🧵 Day ${DAY} · ${CASE} <span class="topic"></span><span class="pres"><span class="dot" style="background:${dot}"></span>Bramblewick <span class="pst">${esc(text)}</span></span>`;
+  $("threadComposer").className = `composer ${s.composer[0]}`;
+  $("threadComposer").textContent = s.composer[1];
+  $("threads").innerHTML =
+    (name === "midnight" ? `<div class="sub on">🧵 Day 13 · The Scarecrow's Alibi</div><div class="sub old">🔒 Day ${DAY} · ${CASE}</div>` : `<div class="sub on">🧵 Day ${DAY} · ${CASE}</div>`) +
+    `<div class="sub old">🔒 Day 11 · The Bell That Rang Twice</div><div class="sub old">🔒 Day 10 · Flour on the Bridge</div>`;
+  for (const el of document.querySelectorAll(".scroll")) el.scrollTop = el.scrollHeight;
+  try { localStorage.setItem("bw-daily-tab", name); } catch {}
+}
+for (const [k, s] of Object.entries(STATES)) {
+  const b = document.createElement("button");
+  b.textContent = s.tab;
+  b.dataset.s = k;
+  b.setAttribute("role", "tab");
+  b.onclick = () => show(k);
+  $("tabs").append(b);
+}
+let start = "afternoon";
+try { start = STATES[localStorage.getItem("bw-daily-tab")] ? localStorage.getItem("bw-daily-tab") : start; } catch {}
+show(start);
+</script>
