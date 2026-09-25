@@ -16,7 +16,9 @@ Every game is a murder mystery. The director picks a victim and a killer from th
 
    For **text mode** in the console instead of the browser, run `play.bat --cli` from a terminal in this folder. You get the same villagers, models and mysteries. Type a villager's number or name to talk, `1`–`3` to pick a suggested reply (or type your own), and `/help` for everything else (`/model`, `/mystery hard`, `/case`, `/inspect`, `/accuse`, `/quit`). The server's log goes to `logs/server.log`.
 
-On other systems, or without the `.bat` files: `npm run setup`, then `npm run play`. There are no npm dependencies; you need Node 20+. Automatic llama.cpp download is Windows-only; elsewhere, install llama.cpp yourself and set `LLAMA_SERVER`.
+3. Optional: double-click **`discord.bat`** to run the game as a Discord bot, so friends can play in a channel of your server. See [Discord bot](#discord-bot).
+
+On other systems, or without the `.bat` files: `npm run setup`, then `npm run play` (or `npm run discord`). You need Node 20+. The game itself has no npm dependencies; the Discord bot needs discord.js, which it installs by itself the first time. Automatic llama.cpp download is Windows-only; elsewhere, install llama.cpp yourself and set `LLAMA_SERVER`.
 
 Controls: WASD or arrow keys to walk, Shift to run, E to talk or inspect, 1–3 to pick a reply, T to type your own, Esc to leave.
 
@@ -31,9 +33,80 @@ browser (public/)  ──►  node server (server/)  ──►  llama-server chi
 ```
 
 - **One API for every model.** `server/index.js` exposes the game API and an OpenAI-compatible API at `http://127.0.0.1:3000/v1`. Set `"model"` to any id from `config/models.json`, and the server loads that GGUF (unloading the previous one) before answering. Other tools such as scripts or chat UIs can point at it too.
+- **Other front ends.** Text mode (`scripts/cli.js`) and the Discord bot (`discord/`) talk to the same game API as the browser; `scripts/game-client.js` is the client code they share.
 - **Villagers** are `npcs/<id>/agent.md`: frontmatter for placement, looks and a one-line `hook` (what's going on in their life, which the director uses for motives), then Markdown the model reads as its character sheet, including a personal secret and when to reveal it. `npcs/town.md` is shared lore. Files are re-read on every reply, so edits take effect immediately. In game, the dialogue box's `agent.md` button shows the file and the full system prompt.
 - **Models** are listed in `config/models.json`. Any other `.gguf` you drop into `models/` also appears in the picker with default settings.
 - **Director mode** (`server/director.js`): code builds the facts so every case is solvable. Each innocent has a partner who can vouch for them at the time of the murder. At most one liar per pair, so an honest partner can always expose a lie. One honest witness glimpses the killer. The selected model then writes the weapon, motive, secrets and relationships. If the model's JSON is unusable, stock text fills the gaps.
+
+## Discord bot
+
+Run Bramblewick in a channel of your Discord server, from your own computer. The whole channel plays one case together: everyone sees what the villagers say, while lookups (the case file, a villager's agent.md, the chat log) answer only the person who asked.
+
+### Set it up (once)
+
+1. Double-click **`discord.bat`** (or run `npm run discord`). The first time, it installs the Discord library and walks you through making a bot in the [Discord Developer Portal](https://discord.com/developers/applications): you paste the bot's token and it prints the link that invites the bot to your server. The token is saved in `data/discord.json`, which is git-ignored.
+2. In the channel you want to play in, type `/setup`. The bot replies with a checklist of what works.
+
+That's all. From then on, `discord.bat` starts the game server and the bot together, and Ctrl+C (or closing the window) closes the town. Run `npm run discord:setup` to paste a new token. The full walkthrough, with every local URL, the permissions and troubleshooting, is in [docs/discord-integration.md](docs/discord-integration.md).
+
+The bot needs no public URL: it connects out to Discord, so nothing on the laptop is opened to the internet. To let players watch the town in a browser anyway, `npm run tunnel` (or `discord.bat --tunnel`) mirrors a view-only copy of the game to a public HTTPS link through Cloudflare Tunnel or ngrok, and the bot posts that link. Talking, cases, model switching and `/v1` stay on the laptop.
+
+The invite link asks for View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Add Reactions and **Manage Roles**. Manage Roles is only used to lock the play channel while a villager is thinking; the bot only ever changes that channel's Send Messages setting. Also turn on **Message Content Intent** in the portal's Bot tab so players can just type to talk; without it they use `/say`.
+
+### Playing
+
+Everyone sees these:
+
+| Command | What it does |
+| --- | --- |
+| `/talk <villager>` | Walk up to someone. Then just type in the channel to talk to them. |
+| *(type a line)* | Said to whoever the table is talking to. `1`–`3` picks a suggested reply, a villager's name or number walks up to them, and a line starting with `//` is players talking among themselves. |
+| Reply buttons | The three suggested replies, plus **Walk away**. Anyone can click. |
+| `/say <text>` | Say something (for when typing isn't turned on). |
+| `/leave` · `/reset` | Walk away · make the villager forget your conversation. |
+| `/mystery [easy\|normal\|hard]` | Start a new case. Only the host can throw away a case nobody has solved. |
+| `/accuse <suspect>` | Asks you privately first, then announces the verdict and the solution to everyone. |
+| `/options on\|off` | Suggested replies (off is faster on CPU). |
+
+Only you see these: `/case` (the briefing), `/inspect`, `/people`, `/agent [villager]` (spoilers), `/model` (the list), `/log [villager]` (this case's chat log as a Markdown file), `/status` and `/help`. They work from any channel of the server.
+
+Host only: `/setup`, `/town open|close` (closing unloads the model to free up the laptop and locks the channel), and `/model <name>` to switch models. The host is whoever owns the bot in the Developer Portal, plus anyone with Manage Server, plus any user ids listed under `hosts` in `data/discord.json`.
+
+### How it looks
+
+Everything the story says comes in a box, so it stands out from the players' own chat: each villager's lines in a box the colour of their shirt with their name on top, plus the case briefing, the verdict and the status message. One action is one post: `/talk` shows who walked up and the villager's answer together, and a typed question gets a single reply.
+
+### While a villager is thinking
+
+Only one villager thinks at a time (there's one model), so while one does:
+
+- The channel is locked: Send Messages is turned off for everyone until the answer and its suggested replies are in, then put back exactly as it was. Server admins can still type; their messages get a ⏳ and aren't heard.
+- Older reply buttons stop working, and anything that would make someone think again gets a private "hold that thought".
+- The bot's status turns red (Do Not Disturb) and reads "💭 Old Wen is thinking…". The director writing a case and a model loading count as thinking too.
+
+### Online and offline
+
+The town only exists while your laptop is on, so the bot keeps the channel honest about it. It keeps one status message at the bottom of the channel:
+
+- 🟢 **Bramblewick is open** when the bot starts, with the case and model. Its presence is green.
+- 🔴 **The server is down** when you press Ctrl+C or close the window: it posts that ("try again later"), locks the channel and goes offline. The case and every conversation are kept for next time.
+- If the laptop sleeps or the bot crashes, Discord shows it offline. When it's back, the status says how long it was gone and how many messages nobody heard, and a channel left locked mid-thought is unlocked.
+- 🟡 **The server is down** if the game server stops: the channel locks, the server is restarted, and anyone who tries to talk meanwhile is told to try again later.
+- If the laptop starts before its Wi-Fi does, the bot keeps trying until Discord is reachable.
+
+`/status` shows all of it at once: open or closed, the model, the case, who's thinking, and whether locking and typing work.
+
+### Chat logs and memory
+
+- Every villager's memory of the conversation is saved in `data/discord-state.json`, so a restart or the laptop sleeping picks up exactly where the table left off.
+- Everything said is also logged, one file per case, in `logs/discord/<case id>.jsonl`. `/log` turns the current case's log into a readable transcript.
+- A new case (from Discord, the browser or text mode) starts everyone's conversations fresh; `/reset` clears just one villager.
+
+### Settings
+
+`data/discord.json` holds `token` and `channelId`, plus optional `hosts` (a list of user ids), `lockChannel` (`false` to never lock the channel) and `closeWhenOffline` (`false` to leave the channel open while the bot is offline). The environment variables `DISCORD_TOKEN`, `DISCORD_CHANNEL_ID` and `DISCORD_HOSTS` (comma-separated) override the file.
+
+`npm run test:discord` plays through a whole case against a mock Discord and a fake llama-server (no token or model needed; Linux and macOS).
 
 ## API
 
