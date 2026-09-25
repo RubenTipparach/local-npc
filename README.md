@@ -76,6 +76,8 @@ Host only: `/setup`, `/town open|close` (closing unloads the model to free up th
 
 Everything the story says comes in a box, so it stands out from the players' own chat: each villager's lines in a box the colour of their shirt with their name on top, plus the case briefing, the verdict and the status message. One action is one post: `/talk` shows who walked up and the villager's answer together, and a typed question gets a single reply.
 
+While a villager thinks, you can see it: a "💭 Old Wen is thinking…" post appears right away, with "Bramblewick is typing…" underneath. When the answer is ready that post is deleted and the answer is posted as a new message, complete with its suggested replies, so nobody reads a half-written line.
+
 ### While a villager is thinking
 
 Only one villager thinks at a time (there's one model), so while one does:

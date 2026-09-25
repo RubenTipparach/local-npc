@@ -55,6 +55,7 @@ export class MockDiscord {
     this.deleted = new Set();
     this.reactions = []; // {messageId, emoji}
     this.presences = [];
+    this.typing = 0; // "Bramblewick is typing…" calls
     this.responses = new Map(); // interaction token -> {id, callbacks: [], original, followups: []}
     this.commands = [];
     this.identifies = [];
@@ -347,6 +348,16 @@ export class MockDiscord {
       this.deleted.add(r[2]);
       this.#send(res, 204);
       return this.#dispatch("MESSAGE_DELETE", { id: r[2], channel_id: r[1], guild_id: IDS.guild });
+    }
+    if ((r = m("POST", /^\/channels\/(\d+)\/typing$/))) {
+      this.typing++;
+      return this.#send(res, 204);
+    }
+    if ((r = m("DELETE", /^\/webhooks\/\d+\/([^/]+)\/messages\/(@original|\d+)$/))) {
+      const it = this.responses.get(r[1]);
+      const msg = r[2] === "@original" ? it.original : this.messages.get(r[2]);
+      if (msg) this.deleted.add(msg.id);
+      return this.#send(res, 204);
     }
     if ((r = m("PUT", /^\/channels\/(\d+)\/messages\/(\d+)\/reactions\/([^/]+)\/@me$/))) {
       this.reactions.push({ messageId: r[2], emoji: decodeURIComponent(r[3]) });

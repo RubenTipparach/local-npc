@@ -2,11 +2,10 @@
 // case and hears the same conversations; only one villager thinks at a time, and while they do
 // the channel is locked (see lock.js) and anything that would make them think again is turned away.
 
-import { partial, holdBack, tidy, wire, PREFERRED } from "../scripts/game-client.js";
+import { tidy, wire, PREFERRED } from "../scripts/game-client.js";
 import { villagerPost, replyButtons, caseEmbed } from "./format.js";
 import { record } from "./transcript.js";
 
-const EDIT_EVERY_MS = 1100; // Discord allows about five edits per five seconds per channel
 const MAX_HISTORY = 200;
 
 export class Busy extends Error {}
@@ -76,104 +75,105 @@ function histories(bot, npcId) {
   return (bot.state.histories[npcId] ||= []);
 }
 
-// Where a villager's line goes: a new message in the channel (answering the player's message when
-// there is one), or the reply to the slash command that asked for it, so one action is one post.
+// Where a villager's turn is posted: in the channel (answering the player's message when there is
+// one), or as the reply to the slash command that asked. Either way it's two steps: a "thinking"
+// post while the villager thinks, then that post is deleted and the answer is posted in its place,
+// whole, so nobody watches a half-written line and the answer arrives as a new message.
 export function channelSink(bot, replyTo) {
-  let msg = null;
+  const out = (payload) => ({ ...payload, allowedMentions: NO_PINGS, ...(replyTo ? { reply: { messageReference: replyTo, failIfNotExists: false } } : {}) });
+  let thinking = null;
   return {
-    async post(payload) {
-      msg = await bot.channel.send({ ...payload, allowedMentions: NO_PINGS, ...(replyTo ? { reply: { messageReference: replyTo, failIfNotExists: false } } : {}) });
-      return msg.id;
+    async think(payload) {
+      thinking = await bot.channel.send(out(payload));
     },
-    edit: (payload) => msg.edit(payload),
+    async answer(payload) {
+      await thinking?.delete().catch(() => {});
+      return (await bot.channel.send(out(payload))).id;
+    },
   };
 }
 
 export function replySink(i) {
   return {
-    async post(payload) {
-      const r = await i.reply({ ...payload, allowedMentions: NO_PINGS, withResponse: true });
-      return r.resource.message.id;
+    think: (payload) => i.reply({ ...payload, allowedMentions: NO_PINGS }),
+    async answer(payload) {
+      await i.deleteReply().catch(() => {});
+      return (await i.followUp({ ...payload, allowedMentions: NO_PINGS })).id;
     },
-    edit: (payload) => i.editReply(payload),
   };
 }
 
 const NO_PINGS = { parse: [], repliedUser: false };
 
-// One turn of conversation, like the text mode's reply(): the villager answers (streamed into the
-// post as it's written), then the table gets suggested replies as buttons on the same post.
+// "Bramblewick is typing…" under the channel for as long as the villager thinks. Discord shows it
+// for about ten seconds per call, and posting a message clears it.
+function keepTyping(bot) {
+  const tick = () => bot.channel.sendTyping().catch(() => {});
+  tick();
+  const timer = setInterval(tick, 8000);
+  return () => clearInterval(timer);
+}
+
+// One turn of conversation, like the text mode's reply(): the villager answers, and the table gets
+// suggested replies as buttons on the answer.
 //   line     what the player said, or nothing when they've just walked up
 //   by       who said it (for the chat log)
 //   head     the line above the villager's box (see format.js heads)
-//   sink     where the post goes (default: a new channel message answering `replyTo`)
+//   sink     where it's posted (default: the channel, answering `replyTo`)
 //   clicked  the message whose button was just clicked (already updated, so left alone)
 export async function npcTurn(bot, npc, { line, by, head, replyTo, clicked, sink = channelSink(bot, replyTo) } = {}) {
   await stripButtons(bot, clicked);
   bot.state.talking = npc.id;
   const history = histories(bot, npc.id);
-
-  // Walking back up to someone you've already talked to: remind the table where you left off.
-  const last = !line && [...history].reverse().find((m) => m.role === "assistant");
-  if (last) {
-    const shown = (note) => villagerPost(npc, last.content, { earlier: true, head, note });
-    const id = await sink.post(shown(bot.state.showOptions ? "thinking of replies…" : ""));
-    await suggest(bot, npc, sink, id, shown);
-    return;
-  }
-
-  const shown = (text, opts) => villagerPost(npc, text, { head, ...opts });
-  const id = await sink.post(shown("", { note: "thinking…" }));
-  const live = liveEdits(sink.edit);
-  if (line) {
-    history.push({ role: "user", content: line, by });
-    record(bot.state.caseId, { kind: "say", who: by, npc: npc.name, text: line });
-  } else history.push({ role: "user", opener: true });
-  bot.save.soon();
-
-  let raw = "";
-  let stats = null;
-  let started = false;
+  await sink.think(villagerPost(npc, "", { head, thinking: true }));
+  const stopTyping = keepTyping(bot);
   try {
-    const body = { model: bot.state.modelId, npc: npc.id, history: wire(history) };
-    for await (const { event, data } of bot.api.stream("/api/talk", body)) {
-      if (event === "status" && data.state === "loading") live.set(shown("", { note: `loading ${data.model}…` }));
-      if (event === "token") {
-        raw += data.t;
-        const text = partial(raw, npc.name);
-        if (!started && holdBack(text, raw)) continue;
-        started = true;
-        live.set(shown(text, { streaming: true }));
-      }
-      if (event === "error") throw new Error(data.error);
-      if (event === "done") stats = data;
-    }
-  } catch (e) {
-    history.pop();
+    // Walking back up to someone you've already talked to: remind the table where you left off.
+    const last = !line && [...history].reverse().find((m) => m.role === "assistant");
+    if (last) return await answer(bot, npc, sink, (note) => villagerPost(npc, last.content, { earlier: true, head, note }));
+
+    if (line) {
+      history.push({ role: "user", content: line, by });
+      record(bot.state.caseId, { kind: "say", who: by, npc: npc.name, text: line });
+    } else history.push({ role: "user", opener: true });
     bot.save.soon();
-    const down = bot.apiFailed(e);
-    await live.done(shown(down ? SERVER_DOWN : `Something went wrong on the host's laptop, so ${npc.name} didn't answer. Try again in a moment.`, {}));
-    return;
+
+    let raw = "";
+    let stats = null;
+    try {
+      const body = { model: bot.state.modelId, npc: npc.id, history: wire(history) };
+      for await (const { event, data } of bot.api.stream("/api/talk", body)) {
+        if (event === "token") raw += data.t;
+        if (event === "error") throw new Error(data.error);
+        if (event === "done") stats = data;
+      }
+    } catch (e) {
+      history.pop();
+      bot.save.soon();
+      const down = bot.apiFailed(e);
+      await sink.answer(villagerPost(npc, down ? SERVER_DOWN : `Something went wrong on the host's laptop, so ${npc.name} didn't answer. Try again in a moment.`, { head }));
+      return;
+    }
+
+    const content = tidy(raw, npc.name, true) || "…";
+    history.push({ role: "assistant", content });
+    if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
+    record(bot.state.caseId, { kind: "npc", npc: npc.name, text: content });
+    bot.save.soon();
+
+    const tps = stats?.tokensPerSecond ? ` · ${stats.tokensPerSecond.toFixed(1)} tok/s` : "";
+    const stat = stats ? `${stats.model.name}${tps}` : "";
+    await answer(bot, npc, sink, (note) => villagerPost(npc, content, { head, note: [stat, note].filter(Boolean).join(" · ") }));
+  } finally {
+    stopTyping();
   }
-
-  const content = tidy(raw, npc.name, true) || "…";
-  history.push({ role: "assistant", content });
-  if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
-  record(bot.state.caseId, { kind: "npc", npc: npc.name, text: content });
-  bot.save.soon();
-
-  const tps = stats?.tokensPerSecond ? ` · ${stats.tokensPerSecond.toFixed(1)} tok/s` : "";
-  const stat = stats ? `${stats.model.name}${tps}` : "";
-  const final = (note) => shown(content, { note: [stat, note].filter(Boolean).join(" · ") });
-  await live.done(final(bot.state.showOptions ? "thinking of replies…" : ""));
-  await suggest(bot, npc, sink, id, final);
 }
 
 export const SERVER_DOWN = "🔌 The server is down right now, so nobody in town can answer. Try again later.";
 
-// Three suggested replies as buttons under the villager's line (or just "Walk away" when
-// suggestions are off). Anyone can click one, or type 1-3. `shown(note)` renders the line.
-async function suggest(bot, npc, sink, id, shown) {
+// Three suggested replies as buttons on the answer (or just "Walk away" when suggestions are off).
+// Anyone can click one, or type 1-3. `shown(hint)` renders the answer.
+async function answer(bot, npc, sink, shown) {
   let list = [];
   if (bot.state.showOptions) {
     try {
@@ -182,38 +182,10 @@ async function suggest(bot, npc, sink, id, shown) {
       list = [];
     }
   }
+  const hint = list.length ? (bot.canRead ? "pick a reply or type your own" : "pick a reply or /say your own") : "";
+  const id = await sink.answer({ ...shown(hint), components: replyButtons(list) });
   bot.state.options = { messageId: id, npc: npc.id, list };
   bot.save.soon();
-  const hint = list.length ? (bot.canRead ? "pick a reply or type your own" : "pick a reply or /say your own") : "";
-  await sink.edit({ ...shown(hint), components: replyButtons(list) }).catch((e) => bot.log(`couldn't add the reply buttons: ${e.message}`));
-}
-
-// Streaming edits, throttled to what Discord allows and never overlapping.
-function liveEdits(edit) {
-  let pending = null;
-  let timer = null;
-  let last = 0;
-  let chain = Promise.resolve();
-  const flush = () => {
-    clearTimeout(timer);
-    timer = null;
-    if (!pending) return;
-    const payload = pending;
-    pending = null;
-    last = Date.now();
-    chain = chain.then(() => edit(payload)).catch(() => {});
-  };
-  return {
-    set(payload) {
-      pending = payload;
-      if (!timer) timer = setTimeout(flush, Math.max(0, last + EDIT_EVERY_MS - Date.now()));
-    },
-    async done(payload) {
-      pending = payload;
-      flush();
-      await chain;
-    },
-  };
 }
 
 // The director writes a new case. Everyone's conversations belong to the old case, so they go too.

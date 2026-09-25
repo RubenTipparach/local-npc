@@ -40,7 +40,7 @@ The game API calls the bot makes, all to `http://127.0.0.1:3000`:
 | `GET /api/models` | Which models are downloaded and which is loaded. Also the bot's health check, every 15 seconds. |
 | `POST /api/models/load` · `POST /api/models/unload` | Warming up a model, `/model <name>`, `/town close` |
 | `GET /api/npcs` · `GET /api/npcs/:id` | The villager list and `/agent` |
-| `POST /api/talk` | A villager's reply, streamed |
+| `POST /api/talk` | A villager's reply (the bot shows a "thinking" post until it's complete) |
 | `POST /api/options` | The three suggested replies |
 | `GET /api/case` · `POST /api/case` · `POST /api/case/accuse` | The case, `/mystery` and `/accuse` |
 
