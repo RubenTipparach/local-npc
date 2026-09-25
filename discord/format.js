@@ -10,17 +10,35 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const CASE_COLOR = 0x8b1e2d;
 const TOWN_COLOR = 0x6b8e4e;
 
-// One villager line. `quote` shows the player's line above it when the channel doesn't already
-// show it (a button or /say); `note` is small print underneath.
-export function npcLine(npc, text, { quote, intro, note, streaming, earlier } = {}) {
-  const lines = [];
-  if (intro) lines.push(`-# ${intro}`);
-  if (quote) lines.push(`> **${esc(quote.by)}:** ${esc(quote.text)}`);
+// One villager line, in a box the colour of their shirt (their sprite's colour in the browser
+// game). `head` is a line above the box: who walked up, or what a player said when the channel
+// doesn't already show it (a button, a picked number, /say). `note` is the small print underneath.
+export function villagerPost(npc, text, { head, note, streaming, earlier } = {}) {
   const said = text ? `${earlier ? "*(earlier)* " : ""}${esc(text)}${streaming ? " ▍" : ""}` : "*…*";
-  lines.push(`**${esc(npc.name)}:** ${said}`);
-  if (note) lines.push(`-# ${note}`);
-  return clip(lines.join("\n"), 2000);
+  const box = new EmbedBuilder().setColor(shirtColor(npc)).setAuthor({ name: clip(`${npc.name}, ${npc.title}`, 256) }).setDescription(clip(said, 4000));
+  if (note) box.setFooter({ text: clip(note, 2048) });
+  return { content: head ? clip(head, 2000) : "", embeds: [box] };
 }
+
+// Lightened a little so dark shirts still stand out against Discord's dark theme.
+function shirtColor(npc) {
+  if (!/^#[0-9a-f]{6}$/i.test(npc.shirt || "")) return TOWN_COLOR;
+  const n = parseInt(npc.shirt.slice(1), 16);
+  const lift = (c) => Math.round(c + (255 - c) * 0.3);
+  return (lift(n >> 16) << 16) | (lift((n >> 8) & 255) << 8) | lift(n & 255);
+}
+
+// A line of narration (someone walks away, a setting changes), boxed like the rest of the story.
+export function narration(text, color = TOWN_COLOR) {
+  return { content: "", embeds: [new EmbedBuilder().setColor(color).setDescription(clip(text, 4000))] };
+}
+
+// The line above a villager's box.
+export const heads = {
+  walksUp: (by, npc) => `🚶 **${esc(by)}** walks up to **${esc(npc.name)}**, ${esc(npc.title)}.`,
+  said: (by, text) => `🗨 **${esc(by)}:** ${esc(text)}`,
+  forgets: (npc) => `🧹 **${esc(npc.name)}** forgets your whole conversation.`,
+};
 
 // The suggested replies as buttons, plus a way to walk off. `chosen` marks the one picked.
 export function replyButtons(options, { chosen = -1, disabled = false } = {}) {
@@ -166,37 +184,57 @@ export function agentEmbed(npc) {
 
 const at = (ms, style = "R") => `<t:${Math.floor(ms / 1000)}:${style}>`;
 
-// The one status message the bot keeps at the bottom of the play channel: open, closed, asleep.
-export function statusText(kind, { hostId, since, mystery, model, canRead, link, notes = [] }) {
+// The one status message the bot keeps at the bottom of the play channel, boxed in the colour of
+// the state: green open, red closed or down, yellow waiting on the laptop.
+const STATUS = {
+  open: [0x23a55a, "🟢 Bramblewick is open"],
+  offline: [0xda373c, "🔴 The server is down"],
+  closed: [0xda373c, "🔴 Bramblewick is closed for now"],
+  down: [0xf0b232, "🟡 The server is down"],
+  nomodel: [0xf0b232, "🟡 Bramblewick can't open yet"],
+};
+
+export function statusPost(kind, { hostId, since, mystery, model, canRead, link, notes = [] }) {
   const host = hostId ? `<@${hostId}>'s` : "the host's";
   const now = Date.now();
   const lines = [];
   if (kind === "open") {
-    lines.push("🟢 **Bramblewick is open.**");
-    const bits = [mystery ? `Case: *${esc(mystery.title)}* (${mystery.difficulty}${mystery.accused ? ", solved" : ""})` : "No case yet: start one with `/mystery`"];
-    if (model) bits.push(`Model: ${esc(model)}`);
-    lines.push(bits.join(" · "));
+    lines.push(mystery ? `**Case:** *${esc(mystery.title)}* (${mystery.difficulty}${mystery.accused ? ", solved" : ""})` : "**No case yet:** start one with `/mystery`.");
+    if (model) lines.push(`**Model:** ${esc(model)}`);
     // Angle brackets keep Discord from unfurling the page into a big preview.
-    if (link) lines.push(`🌐 Watch the town: <${link}>`);
-    lines.push(`-# Runs on ${host} laptop, so the town is only open while it's on. Open since ${at(since, "t")}.`);
-    lines.push(
-      canRead
-        ? "-# `/talk` to walk up to someone, then just type to talk to them. Start a message with `//` to talk among yourselves. `/help` for everything."
-        : "-# `/talk` to walk up to someone and `/say` to talk to them. `/help` for everything.",
-    );
+    if (link) lines.push(`🌐 **Watch the town:** <${link}>`);
+    lines.push(`Runs on ${host} laptop, so the town is only open while it's on. Open since ${at(since, "t")}.`);
   } else if (kind === "offline") {
-    lines.push(`🔴 **Bramblewick is closed.** ${cap(host)} laptop went offline ${at(now)}.`);
-    lines.push("-# The case and everyone's memories are kept. The town reopens when the laptop is back.");
+    lines.push(`${cap(host)} laptop went offline ${at(now)}, so the town is closed. **Try again later.**`, "The case and everyone's memories are kept.");
   } else if (kind === "closed") {
-    lines.push(`🔴 **Bramblewick is closed for now.** The host closed it ${at(now)}.`);
-    lines.push("-# The case and everyone's memories are kept.");
+    lines.push(`The host closed the town ${at(now)}. **Try again later.**`, "The case and everyone's memories are kept.");
   } else if (kind === "down") {
-    lines.push(`🟡 **The villagers are asleep.** The game server on ${host} laptop stopped ${at(now)}. Trying to wake it…`);
+    lines.push(`The game stopped on ${host} laptop ${at(now)} and is restarting. **Try again in a minute.**`);
   } else if (kind === "nomodel") {
-    lines.push(`🟡 **Bramblewick can't open yet.** No models are downloaded on ${host} laptop.`);
+    lines.push(`No models are downloaded on ${host} laptop yet.`);
   }
-  for (const n of notes) lines.push(`-# ${n}`);
-  return lines.join("\n");
+  for (const n of notes) lines.push(`*${n}*`);
+  const [color, title] = STATUS[kind];
+  const box = new EmbedBuilder().setColor(color).setTitle(title).setDescription(clip(lines.join("\n"), 4000));
+  if (kind === "open") {
+    box.setFooter({
+      text: canRead
+        ? "/talk to walk up to someone, then just type to talk to them. Start a message with // to talk among yourselves. /help for everything."
+        : "/talk to walk up to someone and /say to talk to them. /help for everything.",
+    });
+  }
+  return { content: "", embeds: [box] };
+}
+
+export function verdictEmbed({ by, suspect, correct, killer }) {
+  return new EmbedBuilder()
+    .setColor(correct ? 0x23a55a : 0xda373c)
+    .setTitle(clip(`⚖️ ${by} accuses ${suspect}`, 256))
+    .setDescription(correct ? `✅ **You got it.** ${esc(killer)} did it.` : `❌ **Wrong.** It was ${esc(killer)}.`);
+}
+
+export function inspectEmbed(c) {
+  return new EmbedBuilder().setColor(CASE_COLOR).setTitle(clip(`At ${cap(c.scene)}`, 256)).setDescription(clip(esc(c.evidence), 4000));
 }
 
 export function statusEmbed(bot) {

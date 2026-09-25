@@ -13,13 +13,29 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { findNpc } from "../scripts/game-client.js";
-import { Busy, Closed, refresh, thinking, npcTurn, stripButtons, newMystery, loadModel, npcById, modelName } from "./table.js";
-import { esc, replyButtons, caseEmbed, solutionEmbeds, newCaseButtons, peopleEmbed, helpEmbed, modelsEmbed, agentEmbed, statusEmbed } from "./format.js";
+import { Busy, Closed, SERVER_DOWN, refresh, thinking, npcTurn, replySink, stripButtons, newMystery, loadModel, npcById, modelName } from "./table.js";
+import {
+  esc,
+  heads,
+  narration,
+  replyButtons,
+  caseEmbed,
+  solutionEmbeds,
+  verdictEmbed,
+  inspectEmbed,
+  newCaseButtons,
+  peopleEmbed,
+  helpEmbed,
+  modelsEmbed,
+  agentEmbed,
+  statusEmbed,
+} from "./format.js";
 import { record, markdown } from "./transcript.js";
 
 const PRIVATE = MessageFlags.Ephemeral;
 const NO_PINGS = { parse: [] };
 const HINT_EVERY_MS = 10 * 60 * 1000;
+const DOWN_NOTE_EVERY_MS = 2 * 60 * 1000;
 
 const villager = (o, required) => o.setName("villager").setDescription("Who (start typing a name)").setAutocomplete(true).setRequired(required);
 
@@ -106,7 +122,7 @@ async function command(bot, i) {
       return caseFile(bot, i);
     case "inspect":
       if (!bot.mystery) return tell(i, "There's nothing to inspect. Start a case with `/mystery`.");
-      return tell(i, `**At ${esc(bot.mystery.scene)}:** ${esc(bot.mystery.evidence)}`);
+      return tell(i, null, { embeds: [inspectEmbed(bot.mystery)] });
     case "agent":
       return agent(bot, i);
     case "log":
@@ -159,9 +175,8 @@ async function talk(bot, i) {
   if (!npc) return tell(i, "Nobody by that name around town. `/people` lists everyone.");
   const by = nameOf(i);
   await thinking(bot, `${npc.name} is thinking`, async () => {
-    await i.reply({ content: `🚶 **${esc(by)}** walks up to **${esc(npc.name)}**, ${esc(npc.title)}.`, allowedMentions: NO_PINGS });
     record(bot.state.caseId, { kind: "event", npc: npc.name, text: `${by} walks up to ${npc.name}` });
-    await npcTurn(bot, npc, {});
+    await npcTurn(bot, npc, { head: heads.walksUp(by, npc), sink: replySink(i) });
   });
 }
 
@@ -170,10 +185,7 @@ async function say(bot, i) {
   if (!npc) return tell(i, "You're not talking to anyone. `/talk` to walk up to someone first.");
   const text = i.options.getString("text").trim();
   const by = nameOf(i);
-  await thinking(bot, `${npc.name} is thinking`, async () => {
-    await i.reply({ content: `🗨 **${esc(by)}:** ${esc(text)}`, allowedMentions: NO_PINGS });
-    await npcTurn(bot, npc, { line: text, by });
-  });
+  await thinking(bot, `${npc.name} is thinking`, () => npcTurn(bot, npc, { line: text, by, head: heads.said(by, text), sink: replySink(i) }));
 }
 
 // A suggested-reply button.
@@ -188,7 +200,7 @@ async function pick(bot, i, n) {
   if (!npc || !line) return tell(i, "That reply isn't available any more.");
   await thinking(bot, `${npc.name} is thinking`, async () => {
     await i.update({ components: replyButtons(o.list, { chosen: n }) });
-    await npcTurn(bot, npc, { line, by: nameOf(i), quote: true, clicked: i.message.id });
+    await npcTurn(bot, npc, { line, by: nameOf(i), head: heads.said(nameOf(i), line), clicked: i.message.id });
   });
 }
 
@@ -203,7 +215,7 @@ async function leave(bot, i) {
   const by = nameOf(i);
   bot.state.talking = null;
   bot.save.soon();
-  await i.reply({ content: `👋 **${esc(by)}** walks away from **${esc(npc.name)}**.`, allowedMentions: NO_PINGS });
+  await i.reply({ ...narration(`👋 **${esc(by)}** walks away from **${esc(npc.name)}**.`), allowedMentions: NO_PINGS });
   record(bot.state.caseId, { kind: "event", npc: npc.name, text: `${by} walks away from ${npc.name}` });
   await stripButtons(bot);
 }
@@ -215,9 +227,8 @@ async function reset(bot, i) {
   await thinking(bot, `${npc.name} is thinking`, async () => {
     delete bot.state.histories[npc.id];
     bot.save.soon();
-    await i.reply({ content: `🧹 **${esc(npc.name)}** forgets your whole conversation.`, allowedMentions: NO_PINGS });
     record(bot.state.caseId, { kind: "event", npc: npc.name, text: `${by} made ${npc.name} forget the conversation` });
-    await npcTurn(bot, npc, {});
+    await npcTurn(bot, npc, { head: heads.forgets(npc), sink: replySink(i) });
   });
 }
 
@@ -230,8 +241,8 @@ export async function onMessage(bot, msg) {
   bot.save.soon();
   const text = msg.content.trim();
   if (!text || text.startsWith("//") || text.startsWith("((")) return;
-  if (bot.town !== "open") return react(msg, "💤");
-  if (bot.busy) return unheard(bot, msg);
+  if (bot.town !== "open") return closedNote(bot, msg);
+  if (bot.busy) return react(msg, "⏳");
   const by = msg.member?.displayName || msg.author.displayName;
   try {
     await refreshQuietly(bot);
@@ -240,13 +251,13 @@ export async function onMessage(bot, msg) {
       const o = bot.state.options;
       const n = Number(text);
       const choice = o?.npc === npc.id && Number.isInteger(n) && n >= 1 && n <= o.list.length ? o.list[n - 1] : null;
-      return await thinking(bot, `${npc.name} is thinking`, () => npcTurn(bot, npc, { line: choice || text, by, quote: !!choice, replyTo: msg.id }));
+      return await thinking(bot, `${npc.name} is thinking`, () => npcTurn(bot, npc, { line: choice || text, by, head: choice && heads.said(by, choice), replyTo: msg.id }));
     }
     const walkTo = !/\s/.test(text) && findNpc(bot.npcs, text);
     if (walkTo) {
       return await thinking(bot, `${walkTo.name} is thinking`, () => {
         record(bot.state.caseId, { kind: "event", npc: walkTo.name, text: `${by} walks up to ${walkTo.name}` });
-        return npcTurn(bot, walkTo, { replyTo: msg.id, intro: `${by} walks up to ${walkTo.name}, ${walkTo.title}.` });
+        return npcTurn(bot, walkTo, { replyTo: msg.id, head: heads.walksUp(by, walkTo) });
       });
     }
     if (Date.now() - (bot.lastHint || 0) > HINT_EVERY_MS) {
@@ -257,28 +268,19 @@ export async function onMessage(bot, msg) {
       });
     }
   } catch (e) {
-    if (e instanceof Busy) return unheard(bot, msg);
-    if (e instanceof Closed) return react(msg, "💤");
+    if (e instanceof Busy) return react(msg, "⏳");
+    if (e instanceof Closed) return closedNote(bot, msg);
     bot.log(`couldn't answer ${by}: ${e.stack || e.message}`);
   }
 }
 
-// Something was said while a villager was still thinking: the lock keeps most people from typing,
-// but not the server's admins. Mark it as unheard, and say why once per thought.
-async function unheard(bot, msg) {
-  react(msg, "⏳");
-  const busy = bot.busy;
-  if (!busy || busy.warned) return;
-  busy.warned = true;
-  try {
-    const note = await msg.reply({
-      content: `-# ⏳ ${busy.label}. Messages sent now aren't heard; say it again when they're done.`,
-      allowedMentions: { ...NO_PINGS, repliedUser: false },
-    });
-    setTimeout(() => note.delete().catch(() => {}), 15_000);
-  } catch {
-    // Can't post; the reaction will have to do.
-  }
+// Said while the town can't answer (the server is down, or the host closed it): mark it 💤, and
+// say why once every couple of minutes rather than answering every message.
+async function closedNote(bot, msg) {
+  react(msg, "💤");
+  if (Date.now() - (bot.lastDownNote || 0) < DOWN_NOTE_EVERY_MS) return;
+  bot.lastDownNote = Date.now();
+  await msg.reply({ ...narration(bot.townProblem(), 0x9a7b2f), allowedMentions: { ...NO_PINGS, repliedUser: false } }).catch(() => {});
 }
 
 const react = (msg, emoji) => msg.react(emoji).catch(() => {});
@@ -325,8 +327,7 @@ async function accuseAnswer(bot, i, caseId, suspectId) {
   const { correct, case: solved } = await bot.api.post("/api/case/accuse", { suspect: suspectId });
   bot.mystery = solved;
   record(bot.state.caseId, { kind: "event", text: `${by} accused ${suspect.name}: ${correct ? "right" : `wrong, it was ${solved.solution.killer}`}` });
-  const verdict = correct ? `✅ **You got it.** ${esc(solved.solution.killer)} did it.` : `❌ **Wrong.** It was ${esc(solved.solution.killer)}.`;
-  await announce(bot, i, { content: `⚖️ **${esc(by)}** accuses **${esc(suspect.name)}**.\n${verdict}`, embeds: solutionEmbeds(solved), components: newCaseButtons() });
+  await announce(bot, i, { embeds: [verdictEmbed({ by, suspect: suspect.name, correct, killer: solved.solution.killer }), ...solutionEmbeds(solved)], components: newCaseButtons() });
   bot.presence();
   await bot.updateStatus();
 }
@@ -339,15 +340,15 @@ async function mystery(bot, i, difficulty) {
   if (i.isButton() && i.channelId !== bot.channel.id) return tell(i, `The table is in <#${bot.channel.id}>.`);
   const by = nameOf(i);
   await thinking(bot, "The director is writing a case", async () => {
-    const head = `🖋️ **${esc(by)}** asked for a new **${difficulty}** case. The director is writing it with **${esc(modelName(bot))}**. On the CPU this takes 1 to 2 minutes…`;
-    await i.reply({ content: head, allowedMentions: NO_PINGS });
+    const writing = `🖋️ **${esc(by)}** asked for a new **${difficulty}** case. The director is writing it with **${esc(modelName(bot))}**. On the CPU this takes 1 to 2 minutes…`;
+    await i.reply({ ...narration(writing), allowedMentions: NO_PINGS });
     if (i.isButton()) i.message.edit({ components: [] }).catch(() => {});
     try {
-      const { embeds } = await newMystery(bot, difficulty, { progress: (s) => i.editReply(`${head}\n-# ⏱ ${s}s`) });
+      const { embeds } = await newMystery(bot, difficulty, { progress: (s) => i.editReply(narration(`${writing}\n-# ⏱ ${s}s`)) });
       await i.editReply({ content: `🖋️ A new **${difficulty}** case, asked for by **${esc(by)}**.`, embeds });
     } catch (e) {
-      await i.editReply(`The director couldn't write a case: ${esc(e.message)}. Try \`/mystery\` again.`);
-      bot.apiFailed(e);
+      const down = bot.apiFailed(e);
+      await i.editReply(narration(down ? SERVER_DOWN : `The director couldn't write a case: ${esc(e.message)}. Try \`/mystery\` again.`, 0x9a7b2f));
     }
   });
   bot.presence();
@@ -359,7 +360,7 @@ async function mystery(bot, i, difficulty) {
 async function options(bot, i) {
   bot.state.showOptions = i.options.getString("state") === "on";
   bot.save.soon();
-  return i.reply({ content: `💬 Suggested replies are **${bot.state.showOptions ? "on" : "off"}**.` });
+  return i.reply(narration(`💬 Suggested replies are **${bot.state.showOptions ? "on" : "off"}**.`));
 }
 
 async function agent(bot, i) {
@@ -389,12 +390,12 @@ async function switchModel(bot, i) {
   const m = bot.models.find((x) => x.present && (x.id === want || x.name.toLowerCase() === want));
   if (!m) return tell(i, "No downloaded model by that name. `/model` lists them.");
   await thinking(bot, `Loading ${m.name}`, async () => {
-    await i.reply({ content: `📦 Switching the town to **${esc(m.name)}**…` });
+    await i.reply(narration(`📦 Switching the town to **${esc(m.name)}**…`));
     try {
       const active = await loadModel(bot, m.id);
-      await i.editReply(`📦 The villagers now speak with **${esc(m.name)}**, ${active.device?.mode === "cpu" ? "on the CPU" : "on the GPU"}.`);
+      await i.editReply(narration(`📦 The villagers now speak with **${esc(m.name)}**, ${active.device?.mode === "cpu" ? "on the CPU" : "on the GPU"}.`));
     } catch (e) {
-      await i.editReply(`📦 Couldn't load ${esc(m.name)}: ${esc(e.message)}`);
+      await i.editReply(narration(bot.apiFailed(e) ? SERVER_DOWN : `📦 Couldn't load ${esc(m.name)}: ${esc(e.message)}`, 0x9a7b2f));
     }
   });
   await bot.updateStatus();

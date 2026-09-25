@@ -3,7 +3,7 @@
 // the channel is locked (see lock.js) and anything that would make them think again is turned away.
 
 import { partial, holdBack, tidy, wire, PREFERRED } from "../scripts/game-client.js";
-import { npcLine, replyButtons, caseEmbed } from "./format.js";
+import { villagerPost, replyButtons, caseEmbed } from "./format.js";
 import { record } from "./transcript.js";
 
 const EDIT_EVERY_MS = 1100; // Discord allows about five edits per five seconds per channel
@@ -76,15 +76,39 @@ function histories(bot, npcId) {
   return (bot.state.histories[npcId] ||= []);
 }
 
-// One turn of conversation, like the text mode's reply(): the villager answers (streamed into a
-// message as it's written), then the table gets suggested replies as buttons.
+// Where a villager's line goes: a new message in the channel (answering the player's message when
+// there is one), or the reply to the slash command that asked for it, so one action is one post.
+export function channelSink(bot, replyTo) {
+  let msg = null;
+  return {
+    async post(payload) {
+      msg = await bot.channel.send({ ...payload, allowedMentions: NO_PINGS, ...(replyTo ? { reply: { messageReference: replyTo, failIfNotExists: false } } : {}) });
+      return msg.id;
+    },
+    edit: (payload) => msg.edit(payload),
+  };
+}
+
+export function replySink(i) {
+  return {
+    async post(payload) {
+      const r = await i.reply({ ...payload, allowedMentions: NO_PINGS, withResponse: true });
+      return r.resource.message.id;
+    },
+    edit: (payload) => i.editReply(payload),
+  };
+}
+
+const NO_PINGS = { parse: [], repliedUser: false };
+
+// One turn of conversation, like the text mode's reply(): the villager answers (streamed into the
+// post as it's written), then the table gets suggested replies as buttons on the same post.
 //   line     what the player said, or nothing when they've just walked up
-//   by       who said it (for the chat log and the quote)
-//   quote    show the line above the answer (it came from a button or /say, not a message)
-//   replyTo  the player's message to answer
-//   intro    small print above the answer
+//   by       who said it (for the chat log)
+//   head     the line above the villager's box (see format.js heads)
+//   sink     where the post goes (default: a new channel message answering `replyTo`)
 //   clicked  the message whose button was just clicked (already updated, so left alone)
-export async function npcTurn(bot, npc, { line, by, quote, replyTo, intro, clicked } = {}) {
+export async function npcTurn(bot, npc, { line, by, head, replyTo, clicked, sink = channelSink(bot, replyTo) } = {}) {
   await stripButtons(bot, clicked);
   bot.state.talking = npc.id;
   const history = histories(bot, npc.id);
@@ -92,15 +116,15 @@ export async function npcTurn(bot, npc, { line, by, quote, replyTo, intro, click
   // Walking back up to someone you've already talked to: remind the table where you left off.
   const last = !line && [...history].reverse().find((m) => m.role === "assistant");
   if (last) {
-    const shown = (note) => npcLine(npc, last.content, { earlier: true, intro, note });
-    const msg = await send(bot, shown(bot.state.showOptions ? "thinking of replies…" : ""), replyTo);
-    await suggest(bot, npc, msg, shown);
+    const shown = (note) => villagerPost(npc, last.content, { earlier: true, head, note });
+    const id = await sink.post(shown(bot.state.showOptions ? "thinking of replies…" : ""));
+    await suggest(bot, npc, sink, id, shown);
     return;
   }
 
-  const shown = (text, opts) => npcLine(npc, text, { quote: quote && line ? { by, text: line } : null, intro, ...opts });
-  const msg = await send(bot, shown("", {}), replyTo);
-  const live = liveEdits(msg);
+  const shown = (text, opts) => villagerPost(npc, text, { head, ...opts });
+  const id = await sink.post(shown("", { note: "thinking…" }));
+  const live = liveEdits(sink.edit);
   if (line) {
     history.push({ role: "user", content: line, by });
     record(bot.state.caseId, { kind: "say", who: by, npc: npc.name, text: line });
@@ -113,13 +137,13 @@ export async function npcTurn(bot, npc, { line, by, quote, replyTo, intro, click
   try {
     const body = { model: bot.state.modelId, npc: npc.id, history: wire(history) };
     for await (const { event, data } of bot.api.stream("/api/talk", body)) {
-      if (event === "status" && data.state === "loading") live.set({ content: shown("", { note: `loading ${data.model}…` }) });
+      if (event === "status" && data.state === "loading") live.set(shown("", { note: `loading ${data.model}…` }));
       if (event === "token") {
         raw += data.t;
         const text = partial(raw, npc.name);
         if (!started && holdBack(text, raw)) continue;
         started = true;
-        live.set({ content: shown(text, { streaming: true }) });
+        live.set(shown(text, { streaming: true }));
       }
       if (event === "error") throw new Error(data.error);
       if (event === "done") stats = data;
@@ -127,8 +151,8 @@ export async function npcTurn(bot, npc, { line, by, quote, replyTo, intro, click
   } catch (e) {
     history.pop();
     bot.save.soon();
-    await live.done({ content: shown("", { note: `${npc.name} didn't answer: ${e.message}` }) });
-    bot.apiFailed(e);
+    const down = bot.apiFailed(e);
+    await live.done(shown(down ? SERVER_DOWN : `Something went wrong on the host's laptop, so ${npc.name} didn't answer. Try again in a moment.`, {}));
     return;
   }
 
@@ -141,13 +165,15 @@ export async function npcTurn(bot, npc, { line, by, quote, replyTo, intro, click
   const tps = stats?.tokensPerSecond ? ` · ${stats.tokensPerSecond.toFixed(1)} tok/s` : "";
   const stat = stats ? `${stats.model.name}${tps}` : "";
   const final = (note) => shown(content, { note: [stat, note].filter(Boolean).join(" · ") });
-  await live.done({ content: final(bot.state.showOptions ? "thinking of replies…" : "") });
-  await suggest(bot, npc, msg, final);
+  await live.done(final(bot.state.showOptions ? "thinking of replies…" : ""));
+  await suggest(bot, npc, sink, id, final);
 }
+
+export const SERVER_DOWN = "🔌 The server is down right now, so nobody in town can answer. Try again later.";
 
 // Three suggested replies as buttons under the villager's line (or just "Walk away" when
 // suggestions are off). Anyone can click one, or type 1-3. `shown(note)` renders the line.
-async function suggest(bot, npc, msg, shown) {
+async function suggest(bot, npc, sink, id, shown) {
   let list = [];
   if (bot.state.showOptions) {
     try {
@@ -156,23 +182,14 @@ async function suggest(bot, npc, msg, shown) {
       list = [];
     }
   }
-  bot.state.options = { messageId: msg.id, npc: npc.id, list };
+  bot.state.options = { messageId: id, npc: npc.id, list };
   bot.save.soon();
-  const content = shown(list.length ? "pick a reply or type your own" : "");
-  await msg.edit({ content, components: replyButtons(list) }).catch((e) => bot.log(`couldn't add the reply buttons: ${e.message}`));
-}
-
-// Posts in the play channel, as a reply to the player's message when there is one.
-export function send(bot, content, replyTo) {
-  return bot.channel.send({
-    content,
-    allowedMentions: { parse: [], repliedUser: false },
-    ...(replyTo ? { reply: { messageReference: replyTo, failIfNotExists: false } } : {}),
-  });
+  const hint = list.length ? (bot.canRead ? "pick a reply or type your own" : "pick a reply or /say your own") : "";
+  await sink.edit({ ...shown(hint), components: replyButtons(list) }).catch((e) => bot.log(`couldn't add the reply buttons: ${e.message}`));
 }
 
 // Streaming edits, throttled to what Discord allows and never overlapping.
-function liveEdits(msg) {
+function liveEdits(edit) {
   let pending = null;
   let timer = null;
   let last = 0;
@@ -184,7 +201,7 @@ function liveEdits(msg) {
     const payload = pending;
     pending = null;
     last = Date.now();
-    chain = chain.then(() => msg.edit(payload)).catch(() => {});
+    chain = chain.then(() => edit(payload)).catch(() => {});
   };
   return {
     set(payload) {

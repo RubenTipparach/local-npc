@@ -72,6 +72,10 @@ Only you see these: `/case` (the briefing), `/inspect`, `/people`, `/agent [vill
 
 Host only: `/setup`, `/town open|close` (closing unloads the model to free up the laptop and locks the channel), and `/model <name>` to switch models. The host is whoever owns the bot in the Developer Portal, plus anyone with Manage Server, plus any user ids listed under `hosts` in `data/discord.json`.
 
+### How it looks
+
+Everything the story says comes in a box, so it stands out from the players' own chat: each villager's lines in a box the colour of their shirt with their name on top, plus the case briefing, the verdict and the status message. One action is one post: `/talk` shows who walked up and the villager's answer together, and a typed question gets a single reply.
+
 ### While a villager is thinking
 
 Only one villager thinks at a time (there's one model), so while one does:
@@ -84,10 +88,10 @@ Only one villager thinks at a time (there's one model), so while one does:
 
 The town only exists while your laptop is on, so the bot keeps the channel honest about it. It keeps one status message at the bottom of the channel:
 
-- 🟢 **open** when the bot starts, with the case and model. Its presence is green.
-- 🔴 **closed** when you press Ctrl+C or close the window: it posts that, locks the channel and goes offline. The case and every conversation are kept for next time.
+- 🟢 **Bramblewick is open** when the bot starts, with the case and model. Its presence is green.
+- 🔴 **The server is down** when you press Ctrl+C or close the window: it posts that ("try again later"), locks the channel and goes offline. The case and every conversation are kept for next time.
 - If the laptop sleeps or the bot crashes, Discord shows it offline. When it's back, the status says how long it was gone and how many messages nobody heard, and a channel left locked mid-thought is unlocked.
-- 🟡 **the villagers are asleep** if the game server stops: the channel locks and the server is restarted.
+- 🟡 **The server is down** if the game server stops: the channel locks, the server is restarted, and anyone who tries to talk meanwhile is told to try again later.
 - If the laptop starts before its Wi-Fi does, the bot keeps trying until Discord is reachable.
 
 `/status` shows all of it at once: open or closed, the model, the case, who's thinking, and whether locking and typing work.

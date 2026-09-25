@@ -376,6 +376,14 @@ export class MockDiscord {
         if (target) this.#edit(target, data);
       }
       if (body.type === 8) it.choices = data.choices;
+      if (url.searchParams.get("with_response") === "true" && it.original) {
+        const { edits, ephemeral, deferred, interactionId, by, command, ...wire } = it.original;
+        return this.#send(res, 200, {
+          interaction: { id: it.id, type: it.type, response_message_id: wire.id, response_message_loading: body.type === 5, response_message_ephemeral: !!ephemeral },
+          resource: { type: body.type, message: wire },
+        });
+      }
+      if (body.type === 4 && !(data.flags & 64)) this.#echo("MESSAGE_CREATE", it.original);
       return this.#send(res, 204);
     }
     if ((r = m("PATCH", /^\/webhooks\/\d+\/([^/]+)\/messages\/(@original|\d+)$/))) {

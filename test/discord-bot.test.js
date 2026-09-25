@@ -86,7 +86,10 @@ const game = async (p) => (await fetch(`http://127.0.0.1:${GAME_PORT}${p}`)).jso
 // ---- helpers over the mock --------------------------------------------------------------------
 
 const isPrivate = (msg) => !!(msg.flags & EPHEMERAL);
-const text = (msg) => [msg.content, ...msg.embeds.map((e) => [e.title, e.description, ...(e.fields || []).map((f) => `${f.name} ${f.value}`)].join(" "))].join(" ");
+const text = (msg) =>
+  [msg.content, ...msg.embeds.map((e) => [e.author?.name, e.title, e.description, ...(e.fields || []).map((f) => `${f.name} ${f.value}`), e.footer?.text].filter(Boolean).join(" "))]
+    .filter(Boolean)
+    .join(" ");
 const buttons = (msg) => msg.components.flatMap((r) => r.components);
 
 // The first answer to an interaction (its reply, or the edit of a deferred reply).
@@ -97,8 +100,12 @@ async function answer(mock, token, what = "an answer") {
   });
 }
 
-const statusMessage = (mock) => mock.lastBotMessage((m) => /^(🟢|🔴|🟡)/.test(m.content));
-const npcMessages = (mock, name) => mock.channelMessages().filter((m) => m.author.id === IDS.bot && m.content.includes(`**${name}:**`));
+// The status message is a box whose title starts with its colour.
+const isStatus = (m) => m.author.id === IDS.bot && /^(🟢|🔴|🟡)/.test(m.embeds?.[0]?.title || "");
+const statusMessage = (mock) => mock.lastBotMessage(isStatus);
+const status = (mock) => (statusMessage(mock) ? text(statusMessage(mock)) : "");
+// A villager's line is a box with their name on top.
+const npcMessages = (mock, name) => mock.channelMessages().filter((m) => m.author.id === IDS.bot && m.embeds?.[0]?.author?.name?.startsWith(`${name},`));
 
 // ---- the test ---------------------------------------------------------------------------------
 
@@ -130,7 +137,7 @@ async function main() {
       assert.ok(mine && BigInt(mine.allow) & (1n << 11n), "bot allowed to send");
       const saved = JSON.parse(fs.readFileSync(path.join(dir, "data", "discord.json"), "utf8"));
       assert.equal(saved.channelId, IDS.channel);
-      assert.match(statusMessage(mock).content, /🟢 \*\*Bramblewick is open\.\*\*/);
+      assert.match(status(mock), /🟢 Bramblewick is open/);
     });
 
     await step("loads the model at once, locking the channel meanwhile", async () => {
@@ -144,7 +151,7 @@ async function main() {
       const token = mock.command("mystery", { difficulty: "normal" });
       const msg = await answer(mock, token);
       assert.ok(!isPrivate(msg));
-      assert.match(mock.response(token).callbacks[0].data.content, /director is writing it/);
+      assert.match(text(mock.response(token).callbacks[0].data), /director is writing it/);
       await mock.waitFor("case briefing", () => msg.embeds[0]?.title?.startsWith("☠"));
       assert.match(text(msg), /Leads/);
       assert.match(text(msg), /Suspects/);
@@ -158,13 +165,17 @@ async function main() {
       const msg = await answer(mock, mock.command("talk", { villager: npc.id }));
       assert.match(msg.content, new RegExp(`walks up to \\*\\*${npc.name}\\*\\*`));
       const reply = await mock.waitFor("reply buttons", () => npcMessages(mock, npc.name).find((m) => buttons(m).length === 4));
-      assert.match(reply.content, /What brings you down to the river\?/);
+      assert.equal(reply.id, msg.id, "the walk-up and the answer are one post");
+      assert.match(reply.embeds[0].description, /What brings you down to the river\?/);
       assert.ok(reply.edits >= 3, `streamed in several edits (${reply.edits})`);
       assert.deepEqual(
         buttons(reply).map((b) => b.label),
         ["1. Where were you at ten?", "2. Who did you see by the mill?", "3. Thanks, I'll be off.", "Walk away"],
       );
-      assert.match(reply.content, /-# fake-model · 12\.5 tok\/s · pick a reply or type your own/);
+      assert.equal(reply.embeds[0].footer.text, "fake-model · 12.5 tok/s · pick a reply or type your own");
+      const lift = (c) => Math.round(c + (255 - c) * 0.3);
+      const shirt = parseInt(npc.shirt.slice(1), 16);
+      assert.equal(reply.embeds[0].color, (lift(shirt >> 16) << 16) | (lift((shirt >> 8) & 255) << 8) | lift(shirt & 255), "boxed in the villager's shirt colour");
     });
 
     await step("typing talks to the villager; the channel locks until they're done", async () => {
@@ -175,15 +186,16 @@ async function main() {
       // Someone who can type anyway (an admin) isn't heard...
       const alices = mock.say("hurry up!", { as: "alice" });
       await mock.waitFor("⏳ reaction", () => mock.reactions.some((r) => r.messageId === alices && r.emoji === "⏳"));
-      await mock.waitFor("unheard note", () => mock.channelMessages().some((m) => m.content.includes("aren't heard")));
+      await sleep(300);
+      assert.ok(!mock.channelMessages().some((m) => text(m).includes("aren't heard")), "no extra post, just the ⏳");
       // ...and commands that would make them think again are turned away, privately.
       const busy = await answer(mock, mock.command("say", { text: "me next" }));
       assert.ok(isPrivate(busy));
       assert.match(busy.content, /⏳ .* is thinking/);
-      const reply = await mock.waitFor("answer", () => npcMessages(mock, npc.name).find((m) => m.content.includes('You ask me "where were you last night?"') && buttons(m).length));
+      const reply = await mock.waitFor("answer", () => npcMessages(mock, npc.name).find((m) => text(m).includes('You ask me "where were you last night?"') && buttons(m).length));
       assert.equal(reply.message_reference?.message_id, bobs, "answers Bob's message");
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
-      assert.ok(!npcMessages(mock, npc.name).some((m) => m.content.includes("hurry up")), "the unheard line never reached the villager");
+      assert.ok(!npcMessages(mock, npc.name).some((m) => text(m).includes("hurry up")), "the unheard line never reached the villager");
     });
 
     let first;
@@ -194,13 +206,13 @@ async function main() {
       assert.equal(buttons(first).length, 0, "older line lost its buttons");
       mock.click(current.id, "opt:1", { as: "bob" });
       await mock.waitFor("pick marked", () => buttons(current)[1]?.style === 1 && buttons(current).every((b) => b.disabled));
-      const reply = await mock.waitFor("answer", () => npcMessages(mock, npc.name).find((m) => m.content.includes("> **Bob:** Who did you see by the mill?") && buttons(m).length));
-      assert.match(reply.content, /You ask me "Who did you see by the mill\?"/);
+      const reply = await mock.waitFor("answer", () => npcMessages(mock, npc.name).find((m) => m.content === "🗨 **Bob:** Who did you see by the mill?" && buttons(m).length));
+      assert.match(reply.embeds[0].description, /You ask me "Who did you see by the mill\?"/);
     });
 
     await step("typing 1-3 picks a suggested reply, like text mode", async () => {
       mock.say("3", { as: "alice" });
-      await mock.waitFor("answer", () => npcMessages(mock, npc.name).find((m) => m.content.includes("> **Alice:** Thanks, I'll be off.") && buttons(m).length));
+      await mock.waitFor("answer", () => npcMessages(mock, npc.name).find((m) => m.content === "🗨 **Alice:** Thanks, I'll be off." && buttons(m).length));
     });
 
     await step("an old button says the moment has passed", async () => {
@@ -217,7 +229,7 @@ async function main() {
       };
       assert.match(text(await ask("people")), new RegExp(`${npc.name}.*talking now`));
       assert.match(text(await ask("case")), /☠/);
-      assert.match((await ask("inspect")).content, /torn scrap of cloth/);
+      assert.match(text(await ask("inspect")), /torn scrap of cloth/);
       assert.match(text(await ask("agent", { villager: npc.id })), new RegExp(`npcs/${npc.id}/agent.md`));
       assert.match(text(await ask("status")), /Open since/);
       assert.match(text(await ask("help")), /Just for you/);
@@ -244,7 +256,7 @@ async function main() {
 
     await step("/leave, then table talk is left alone, and a name walks back up", async () => {
       const bye = await answer(mock, mock.command("leave"));
-      assert.match(bye.content, /walks away from/);
+      assert.match(text(bye), /walks away from/);
       await mock.waitFor("nothing left to click", () => npcMessages(mock, npc.name).every((m) => buttons(m).every((b) => b.disabled)));
       const before = npcMessages(mock, npc.name).length;
       mock.say("// I think it was the baker", { as: "bob" });
@@ -252,14 +264,14 @@ async function main() {
       await mock.waitFor("hint", () => mock.channelMessages().some((m) => m.content.includes("Nobody's listening")));
       assert.equal(npcMessages(mock, npc.name).length, before);
       mock.say(npc.name.split(" ")[0].toLowerCase(), { as: "alice" });
-      const back = await mock.waitFor("walks back", () => npcMessages(mock, npc.name).find((m) => m.content.includes("*(earlier)*") && buttons(m).length));
-      assert.match(back.content, /-# Alice walks up to/);
+      const back = await mock.waitFor("walks back", () => npcMessages(mock, npc.name).find((m) => text(m).includes("*(earlier)*") && buttons(m).length));
+      assert.match(back.content, /^🚶 \*\*Alice\*\* walks up to/);
     });
 
     await step("/reset makes them forget", async () => {
       const r = await answer(mock, mock.command("reset"));
       assert.match(r.content, /forgets your whole conversation/);
-      await mock.waitFor("fresh greeting", () => npcMessages(mock, npc.name).filter((m) => m.content.includes("What brings you")).length === 2);
+      await mock.waitFor("fresh greeting", () => npcMessages(mock, npc.name).filter((m) => text(m).includes("What brings you")).length === 2);
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
     });
 
@@ -267,7 +279,7 @@ async function main() {
       const r = await answer(mock, mock.command("model", { name: "fake-model" }));
       assert.ok(isPrivate(r) && r.content.includes("Only the host"));
       const h = await answer(mock, mock.command("model", { name: "fake-model" }, { as: "host" }));
-      await mock.waitFor("switched", () => h.content.includes("now speak with **fake-model**"));
+      await mock.waitFor("switched", () => text(h).includes("now speak with **fake-model**"));
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
     });
 
@@ -277,9 +289,9 @@ async function main() {
       assert.ok(isPrivate(sure));
       const yes = buttons(sure).find((b) => b.custom_id.startsWith("acc:"));
       mock.click(sure.id, yes.custom_id);
-      const verdict = await mock.waitFor("verdict", () => mock.lastBotMessage((m) => m.content.includes("⚖️")));
-      assert.match(verdict.content, /(You got it|Wrong)/);
-      assert.equal(verdict.embeds.length, 2);
+      const verdict = await mock.waitFor("verdict", () => mock.lastBotMessage((m) => m.embeds[0]?.title?.startsWith("⚖️")));
+      assert.match(text(verdict), /(You got it|Wrong)/);
+      assert.equal(verdict.embeds.length, 3, "verdict, solution and timeline in one post");
       assert.deepEqual(buttons(verdict).map((b) => b.custom_id), ["case:easy", "case:normal", "case:hard"]);
       assert.ok((await game("/api/case")).case.accused);
       const again = await answer(mock, mock.command("accuse", { suspect: killer.id }));
@@ -289,7 +301,7 @@ async function main() {
     await step("/town close: closed status, locked channel, nobody's heard; /town open reopens", async () => {
       const r = await answer(mock, mock.command("town", { action: "close" }, { as: "host" }));
       assert.match(r.content, /Closed/);
-      await mock.waitFor("closed status", () => statusMessage(mock)?.content.includes("closed for now"));
+      await mock.waitFor("closed status", () => status(mock).includes("closed for now"));
       assert.equal(mock.everyoneSend(), "deny");
       const said = mock.say("hello?", { as: "alice" });
       await mock.waitFor("💤", () => mock.reactions.some((x) => x.messageId === said && x.emoji === "💤"));
@@ -297,9 +309,9 @@ async function main() {
       assert.match(t.content, /closed for now/);
       await mock.waitFor("idle presence", () => mock.presences.at(-1)?.status === "idle");
       await answer(mock, mock.command("town", { action: "open" }, { as: "host" }));
-      await mock.waitFor("open status", () => statusMessage(mock)?.content.startsWith("🟢"));
+      await mock.waitFor("open status", () => status(mock).includes("🟢 Bramblewick is open"));
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
-      assert.equal(mock.channelMessages().filter((m) => /^(🟢|🔴|🟡)/.test(m.content)).length, 1, "only one status message in the channel");
+      assert.equal(mock.channelMessages().filter(isStatus).length, 1, "only one status message in the channel");
     });
 
     await step("the game server dies: the channel hears, locks, and reopens when it's restarted", async () => {
@@ -307,24 +319,31 @@ async function main() {
       process.kill(pid, "SIGKILL");
       await answer(mock, mock.command("status"));
       await answer(mock, mock.command("status"));
-      await mock.waitFor("asleep status", () => statusMessage(mock)?.content.includes("villagers are asleep"), 20000);
+      await mock.waitFor("server down status", () => status(mock).includes("🟡 The server is down") && status(mock).includes("restarting"), 20000);
       assert.equal(mock.everyoneSend(), "deny");
       const t = await answer(mock, mock.command("talk", { villager: npc.id }));
-      assert.match(t.content, /villagers are asleep/);
-      await mock.waitFor("back status", () => statusMessage(mock)?.content.includes("game server is back"), 40000);
+      assert.match(t.content, /server is down right now.*Try again later/);
+      const typed = mock.say("hello?", { as: "bob" });
+      await mock.waitFor("💤", () => mock.reactions.some((x) => x.messageId === typed && x.emoji === "💤"));
+      await mock.waitFor("one server-down reply", () => mock.channelMessages().some((m) => m.message_reference?.message_id === typed && text(m).includes("server is down")));
+      const again = mock.say("anyone?", { as: "alice" });
+      await mock.waitFor("💤 again", () => mock.reactions.some((x) => x.messageId === again));
+      await sleep(300);
+      assert.ok(!mock.channelMessages().some((m) => m.message_reference?.message_id === again), "said once, not to every message");
+      await mock.waitFor("back status", () => status(mock).includes("The game server is back"), 40000);
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
     });
 
     await step("a case started from the browser shows up here too", async () => {
       await fetch(`http://127.0.0.1:${GAME_PORT}/api/case`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ difficulty: "hard", model: "fake-model" }) });
-      await mock.waitFor("status mentions the new case", () => statusMessage(mock)?.content.includes("(hard)"), 25000);
+      await mock.waitFor("status mentions the new case", () => status(mock).includes("(hard)"), 25000);
       await mock.waitFor("presence names it", () => mock.presences.at(-1)?.activities[0].state.startsWith("🕵️"));
       const r = await answer(mock, mock.command("say", { text: "hello?" }));
       assert.match(r.content, /not talking to anyone/, "the old conversation belonged to the old case");
       caseInfo = (await game("/api/case")).case;
       npc = (await game("/api/npcs")).find((n) => n.id !== caseInfo.victim.id && n.size !== "small");
       await answer(mock, mock.command("talk", { villager: npc.id }));
-      await mock.waitFor("greeting", () => npcMessages(mock, npc.name).some((m) => buttons(m).length === 4 && m.content.includes("What brings you")));
+      await mock.waitFor("greeting", () => npcMessages(mock, npc.name).some((m) => buttons(m).length === 4 && text(m).includes("What brings you")));
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
     });
 
@@ -340,8 +359,8 @@ async function main() {
       process.kill(-bot.pid, "SIGINT");
       const { code } = await bot.exited;
       assert.equal(code, 0);
-      assert.match(statusMessage(mock).content, /🔴 \*\*Bramblewick is closed\.\*\* <@\d+>'s laptop went offline/);
-      assert.equal(mock.channelMessages().filter((m) => /^(🟢|🔴|🟡)/.test(m.content)).length, 1);
+      assert.match(status(mock), /🔴 The server is down <@\d+>'s laptop went offline .*Try again later/);
+      assert.equal(mock.channelMessages().filter(isStatus).length, 1);
       assert.equal(mock.everyoneSend(), "deny");
       const state = JSON.parse(fs.readFileSync(path.join(dir, "data", "discord-state.json"), "utf8"));
       assert.equal(state.cleanExit, true);
@@ -351,10 +370,9 @@ async function main() {
     await step("back online: unlocks, says who talked to an empty town, remembers the conversation", async () => {
       mock.say("anyone home?", { as: "host" }); // an admin can post into a locked channel
       bot = startBot(dir, mock);
-      await mock.waitFor("open again", () => statusMessage(mock)?.content.startsWith("🟢"), 20000);
-      const status = statusMessage(mock).content;
-      assert.match(status, /1 message came in while the town was away/);
-      assert.doesNotMatch(status, /unexpectedly/);
+      await mock.waitFor("open again", () => status(mock).includes("🟢 Bramblewick is open"), 20000);
+      assert.match(status(mock), /1 message came in while the town was away/);
+      assert.doesNotMatch(status(mock), /unexpectedly/);
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
       await mock.waitFor("model loaded", () => bot.log.includes("is loaded"));
       await mock.waitFor("unlocked after loading", () => mock.everyoneSend() === null);
@@ -370,7 +388,7 @@ async function main() {
       await bot.exited;
       await sleep(300);
       bot = startBot(dir, mock);
-      await mock.waitFor("open again", () => statusMessage(mock)?.content.includes("Went offline unexpectedly"), 20000);
+      await mock.waitFor("open again", () => status(mock).includes("Went offline unexpectedly"), 20000);
       await mock.waitFor("model loaded", () => bot.log.includes("is loaded"));
       await mock.waitFor("unlocked", () => mock.everyoneSend() === null);
     });
@@ -393,7 +411,7 @@ async function main() {
       const b = startBot(dir, mock, { PATH: `${bin}:${process.env.PATH}`, MIRROR_PORT: String(mirrorPort) }, ["--tunnel"]);
       const linkFile = path.join(dir, "data", "public-url.json");
       try {
-        await mock.waitFor("status with the link", () => statusMessage(mock)?.content.includes("🌐 Watch the town: <https://quiet-town-test.trycloudflare.com>"), 20000);
+        await mock.waitFor("status with the link", () => status(mock).includes("🌐 **Watch the town:** <https://quiet-town-test.trycloudflare.com>"), 20000);
         assert.match(b.log, /http:\/\/127\.0\.0\.1:\d+\/\s+->\s+https:\/\/quiet-town-test\.trycloudflare\.com\//);
         assert.match(text(await answer(mock, mock.command("status"))), /quiet-town-test.*view only/);
 
@@ -433,7 +451,7 @@ async function main() {
         await quiet.waitFor("identify", () => quiet.identifies.length);
         assert.ok(!(quiet.identifies[0].intents & MESSAGE_CONTENT_INTENT));
         await quiet.waitFor("status", () => statusMessage(quiet), 20000);
-        assert.match(statusMessage(quiet).content, /`\/say` to talk to them/);
+        assert.match(status(quiet), /\/say to talk to them/);
         const help = await answer(quiet, quiet.command("help"));
         assert.match(text(help), /\/say <text>/);
       } finally {
@@ -475,7 +493,7 @@ async function main() {
         await later.waitFor("a retry", () => b.log.includes("Can't reach Discord"), 20000);
         await later.start(port);
         await later.waitFor("connected", () => later.identifies.length && b.log.includes("Online as"), 30000);
-        await later.waitFor("open", () => statusMessage(later)?.content.startsWith("🟢"), 20000);
+        await later.waitFor("open", () => status(later).includes("🟢 Bramblewick is open"), 20000);
       } finally {
         process.kill(-b.pid, "SIGINT");
         assert.equal((await b.exited).code, 0);

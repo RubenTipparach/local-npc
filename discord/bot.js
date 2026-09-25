@@ -18,7 +18,7 @@ import { loadConfig, saveConfig, loadState, stateSaver, publicLink } from "./sto
 import { ChannelLock } from "./lock.js";
 import { COMMANDS, onInteraction, onMessage } from "./commands.js";
 import { refresh, pickModel, thinking, loadModel, modelName, Busy, Closed } from "./table.js";
-import { statusText } from "./format.js";
+import { statusPost } from "./format.js";
 import { API, inviteUrl } from "./setup.js";
 
 const HEARTBEAT_MS = 30_000; // how often the bot notes it's alive (and notices it slept)
@@ -211,9 +211,9 @@ class Bot {
 
   townProblem() {
     return {
-      closed: "🔴 Bramblewick is closed for now. The host can reopen it with `/town open`.",
-      down: "💤 The villagers are asleep: the game server on the host's laptop isn't answering. Try again in a minute.",
-      nomodel: "No models are downloaded on the host's laptop yet.",
+      closed: "🔴 **Bramblewick is closed for now.** The host can reopen it with `/town open`. Try again later.",
+      down: "🔌 **The server is down right now,** so nobody in town can answer. Try again later.",
+      nomodel: "**Bramblewick can't open yet:** no models are downloaded on the host's laptop.",
     }[this.town];
   }
 
@@ -235,9 +235,10 @@ class Bot {
       if (!this.channel) return;
       this.statusNotes = notes;
       this.lastLink = publicLink();
+      this.lastDownNote = 0; // a new closure or outage gets its own "try again later"
       const old = this.state.statusMessageId;
       try {
-        const msg = await this.channel.send({ content: this.#statusText(kind), allowedMentions: { parse: [] } });
+        const msg = await this.channel.send({ ...this.#statusPost(kind), allowedMentions: { parse: [] } });
         this.state.statusMessageId = msg.id;
         this.save.now();
       } catch (e) {
@@ -251,12 +252,12 @@ class Bot {
   updateStatus() {
     return this.#statusQueue(async () => {
       if (!this.channel || !this.state.statusMessageId) return;
-      await this.channel.messages.edit(this.state.statusMessageId, { content: this.#statusText(this.town) }).catch(() => {});
+      await this.channel.messages.edit(this.state.statusMessageId, this.#statusPost(this.town)).catch(() => {});
     });
   }
 
-  #statusText(kind) {
-    return statusText(kind, {
+  #statusPost(kind) {
+    return statusPost(kind, {
       hostId: this.hostId,
       since: this.onlineSince || Date.now(),
       mystery: this.mystery,
@@ -280,7 +281,7 @@ class Bot {
     const t = this.town;
     if (this.busy) [status, text] = ["dnd", `💭 ${this.busy.label}…`];
     else if (t === "closed") [status, text] = ["idle", "🔴 Closed for now"];
-    else if (t === "down") [status, text] = ["idle", "💤 The villagers are asleep"];
+    else if (t === "down") [status, text] = ["idle", "🔌 The server is down, try again later"];
     else if (t === "nomodel") [status, text] = ["idle", "No models downloaded yet"];
     else if (this.mystery && !this.mystery.accused) text = `🕵️ ${this.mystery.title}`;
     else text = "🏘️ Bramblewick is open";
@@ -371,24 +372,26 @@ class Bot {
     })().catch((e) => this.log(e.message));
   }
 
-  // Called when a request to the game server fails. Two failures in a row mean it's down.
+  // Called when a request to the game server fails. Two failures in a row mean it's down. Returns
+  // whether this was the server being unreachable (as opposed to it answering with an error).
   apiFailed(e) {
     // A refused or dropped connection means the server is gone. A slow answer doesn't: on a busy
     // laptop the server can take a while and still be fine.
     const unreachable = e?.message === "fetch failed" || ["ECONNREFUSED", "ECONNRESET"].includes(e?.cause?.code);
-    if (!unreachable) return;
-    if (!this.serverUp && this.started) return;
-    if (++this.failures < 2 && this.serverUp) return;
+    if (!unreachable) return false;
+    if (!this.serverUp && this.started) return true;
+    if (++this.failures < 2 && this.serverUp) return true;
     this.serverUp = false;
-    if (this.stopping) return;
+    if (this.stopping) return true;
     this.log("The game server isn't answering.");
     if (this.server && !this.server.running) this.server.start();
-    if (!this.started) return;
+    if (!this.started) return true;
     (async () => {
       await this.#holdForTown();
       await this.postStatus();
       this.presence();
     })().catch((err) => this.log(err.message));
+    return true;
   }
 
   // ---- being away -----------------------------------------------------------------------------

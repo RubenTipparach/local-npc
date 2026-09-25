@@ -102,10 +102,10 @@ A dedicated channel works best: while a villager is thinking, and while the town
 ## Running it day to day
 
 - **Start:** `discord.bat`. It starts the game server and the bot together. The game server's own log goes to `logs/server.log`; the window shows the bot's log.
-- **Stop:** Ctrl+C or close the window. The bot posts 🔴 **closed**, locks the channel and goes offline. The case and every conversation are kept.
-- **Laptop sleeps or crashes:** Discord shows the bot offline. When it's back, its status message says how long it was gone and how many messages nobody heard, and a channel left locked mid-thought is unlocked.
+- **Stop:** Ctrl+C or close the window. The bot posts 🔴 **The server is down** ("try again later"), locks the channel and goes offline. The case and every conversation are kept.
+- **Laptop sleeps or crashes:** the bot goes with it, so nothing can answer: Discord shows the bot offline, and slash commands fail with Discord's own "The application did not respond". When the laptop is back, the status message says how long it was gone and how many messages nobody heard, and a channel left locked mid-thought is unlocked. (Answering even then would need a small always-on relay somewhere other than the laptop; see the daily-mode mockup's open questions.)
 - **Wi-Fi not up yet:** the bot keeps retrying until Discord is reachable.
-- **Game server stops:** the channel gets 🟡 **the villagers are asleep** and locks, and the server is restarted.
+- **Game server stops:** the channel gets 🟡 **The server is down** and locks, and the server is restarted. Anyone who tries to talk meanwhile gets "the server is down right now, try again later" (once, not for every message).
 - **Closing for the night without stopping the bot:** `/town close` unloads the model to free up the laptop; `/town open` reopens.
 - **`/status`** (private) shows it all: open or closed, the model, the case, who's thinking, whether locking and typing work, and the watch link.
 
@@ -185,7 +185,7 @@ A daily game is designed but not built yet. Each day the bot would post a case i
 | The channel doesn't lock while a villager thinks | Give the bot Manage Roles, then run `/setup` again. `/status` shows why the lock is off. |
 | The channel stays locked | Run `/town open` if the town is closed. Otherwise restart the bot, which unlocks at start. As a last resort, remove the Send Messages ✗ for @everyone in the channel's permissions. |
 | "Discord didn't accept the bot token" | Reset the token in the Bot tab and run `npm run discord:setup`. |
-| 🟡 "The villagers are asleep" | The game server stopped. Check `logs/server.log`; the bot restarts it on its own. |
+| 🟡 "The server is down" | The game server stopped. Check `logs/server.log`; the bot restarts it on its own. |
 | "No tunnel program is installed" | Install Cloudflare Tunnel or ngrok (above) and open a new terminal. |
 | The watch link says "Bramblewick is closed right now" | The game server isn't running on the laptop. Start `discord.bat` or `play.bat`. |
 | `Port 3001 is taken` | Set `MIRROR_PORT` to another port. |
